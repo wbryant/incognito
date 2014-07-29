@@ -1,0 +1,61 @@
+# This module contains functions to import SBML models and interface in various
+# ways with NetworkX.
+
+import sys
+sys.path.append('/Users/wbryant/work/scripts/python')
+sys.path.append('/Users/wbryant/work/scripts/python/SBML')
+sys.path.append('/usr/local/lib/python2.7/site-packages')
+
+from libsbml import *
+import networkx as nx
+import re
+# from numpy import *
+# from math import *
+
+# This function imports an SBML model and converts it into a bipartite network
+# of metabolites and reactions, noting weights for metabolites.
+def import_SBML_to_bipartite(SBML_filename):
+    
+    # Import SBML model
+    reader = SBMLReader()
+    document = reader.readSBMLFromFile(SBML_filename)
+    model = document.getModel()
+    print model.getId()
+    
+    # Initialize NetworkX model and populate with metabolite and reaction nodes.
+    # At the same time, create an id / node_idx dictionary for use when creating
+    # edges.
+    G = nx.Graph()
+    node_idx = 0
+    node_id_dictionary = {}
+   
+    for metabolite in model.getListOfSpecies():
+        node_idx += 1
+        G.add_node(node_idx)
+        G.node[node_idx]['name'] = metabolite.getName()
+        G.node[node_idx]['id'] = metabolite.getId()
+        G.node[node_idx]['type'] = 'metabolite'
+        node_id_dictionary[metabolite.getId()] = node_idx
+
+    for reaction in model.getListOfReactions():
+        node_idx += 1
+        G.add_node(node_idx)
+        G.node[node_idx]['name'] = reaction.getName()
+        G.node[node_idx]['id'] = reaction.getId()
+        G.node[node_idx]['type'] = 'reaction'
+        node_id_dictionary[reaction.getId()] = node_idx
+        
+        # Cycle through all reactants and products and add edges
+        for reactant in reaction.getListOfReactants():
+            print node_idx
+            print reactant.getSpecies()
+            G.add_edge(node_idx,node_id_dictionary[reactant.getSpecies()])
+        for product in reaction.getListOfProducts():
+            print node_idx
+            print product.getSpecies()
+            G.add_edge(node_idx,node_id_dictionary[product.getSpecies()])
+    
+    return G
+    
+    
+    
