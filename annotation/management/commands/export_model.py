@@ -117,7 +117,7 @@ class Command(BaseCommand):
         print("Writing model to SBML ...")
         document.setModel(model)
 #         document.setLevelAndVersion(2,4)
-        writeSBMLToFile(document, "/Users/wbryant/work/BTH/bth_model/test_libsbml.xml")
+        writeSBMLToFile(document, "/Users/wbryant/work/cogzymes/incognito/test_libsbml.xml")
         
             
         
