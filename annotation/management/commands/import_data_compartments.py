@@ -1,0 +1,54 @@
+from django.core.management.base import BaseCommand, CommandError
+from annotation.models import Compartment, Direction
+import sys, os, re
+
+
+class Command(BaseCommand):
+    
+    help = 'COMMAND BRIEF'
+        
+    def handle(self, *args, **options):
+        
+        """ COMMAND DESCRIPTION
+            
+        """ 
+        
+        Compartment.objects.all().delete()
+        Direction.objects.all().delete()
+
+
+        file_in = "/Users/wbryant/work/BTH/data/metanetx/comp_prop.tsv"
+        
+        f_in = open(file_in, 'r')
+        
+        for line in f_in:
+            if line[0] != "#":
+                print line
+                line = line.split("\t")
+                print line
+                id = line[0]
+                name = line[1]
+                
+                comp = Compartment(
+                    id = id,
+                    name = name
+                )
+                comp.save()
+        
+        f_in.close()
+        
+        direction = Direction(
+            direction = "ltr")
+        direction.save()
+        
+        direction = Direction(
+            direction = "rtl")
+        direction.save()
+        
+        direction = Direction(
+            direction = "both")
+        direction.save()
+        
+                
+                
+                

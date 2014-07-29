@@ -1,0 +1,75 @@
+from django.core.management.base import NoArgsCommand, CommandError
+from annotation.models import Reaction, GO, GO2EC, EC_Reaction, GO_Reaction, EC
+#from ffpred.extract_results import *
+import sys, os, re, shelve
+
+class Command(NoArgsCommand):
+    
+    help = 'Infers GO_Reaction table from current GO2EC and EC_Reaction.'
+        
+    def handle(self, **options):
+        
+        source = "Original"
+        
+        #i = 0
+        
+        #GO_Reaction.objects.all().delete()
+        
+        print("Finding all GOs ...")
+        
+        gos = GO.objects.filter(go2ec__isnull=False).distinct()
+        num_tot = len(gos)
+        print "Number of GOs = %d" % num_tot
+        
+        print 'Populating GO_Reaction relationship ...'
+        #Initiate counter
+        num_done = 0
+        next_progress = 1
+        sys.stdout.write("\r - %d %%" % num_done)
+        sys.stdout.flush()
+        
+        i = 0
+        
+        for go in gos:
+            i += 1
+            #if i / 10 == i / 10.0:
+            #    print i
+            reactions = Reaction.objects.filter(ec__go2ec__go_id = go)
+            print("%d: %d reactions" % (i, len(reactions)))
+            
+            if len(reactions) < 1000:
+                for reaction in reactions:
+                    
+                    if EC.objects.filter(go2ec__go_id = go).count() > 1:
+                        ec = EC.objects.filter(go2ec__go_id = go)[0]
+                    else:
+                        ec = EC.objects.filter(go2ec__go_id = go)[0]
+                    
+                    #i += 1
+                    #if i > 30:
+                    #    break
+                    #print "%s: %s" % (go.id, reaction.mnxref_id)
+                    #
+                    go_rxn = GO_Reaction(
+                        go=go,
+                        ec=ec,
+                        reaction=reaction,
+                        source=source   
+                    )
+                    
+                    go_rxn.save()
+
+            #Counter
+            num_done += 1
+            if ((100 * num_done) / num_tot) > next_progress:
+                sys.stdout.write("\r - %d %%" % next_progress)
+                sys.stdout.flush()
+                next_progress += 1
+        
+        #Finish counter
+        sys.stdout.write("\r - 100 %\n")
+        sys.stdout.flush()
+        
+ 
+        
+        

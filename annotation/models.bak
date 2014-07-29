@@ -1,0 +1,112 @@
+from django.db import models
+
+# Create your models here.
+
+## Entities
+class Gene(models.Model):
+    """NCBI genes."""
+    
+    gi = models.IntegerField(primary_key = True)
+    locus = models.CharField(max_length = 10)
+    locus_tag = models.CharField(max_length = 10)
+    name = models.CharField(max_length = 200)
+    annotation = models.CharField(max_length = 200)
+
+    def __unicode__(self):
+        return self.locus_tag
+
+class Enzyme(models.Model):
+    """Protein complexes that catalyse metabolic reactions."""
+    
+    name = models.CharField(max_length=1000)
+    constituents = models.ManyToManyField(Gene)
+    source = models.CharField(max_length=10)
+    
+    def __unicode__(self):
+        return self.name
+
+class Reaction(models.Model):
+    """Metabolic reactions that can occur - using MNXref as cross-reference."""
+    
+    mnxref_id = models.CharField(max_length=100, primary_key=True)
+    seed_id = models.CharField(max_length=1000, null=True, blank=True)
+    metacyc_id = models.CharField(max_length=2500, null=True, blank=True)
+    bigg_id = models.CharField(max_length=1000, null=True, blank=True)
+    
+    catalysts = models.ManyToManyField(Enzyme, through='Catalyst')
+
+    def __unicode__(self):
+        return self.mnxref
+
+class GO(models.Model):
+    #GO terms in molecular function
+    id = models.CharField(max_length=10, primary_key=True)
+    name = models.CharField(max_length=1000)
+    
+    catalysts = models.ManyToManyField(Enzyme, through='Catalyst_go')
+    
+    def __unicode__(self):
+        return self.name
+
+class EC(models.Model):
+    # EC numbers and their m-to-m links to reactions and enzymes and links to GO terms where known
+    
+    number = models.CharField(max_length=20, primary_key = True)
+    
+    go_term = models.ForeignKey(GO, blank = True, null = True)
+    catalysts_ec = models.ManyToManyField(Enzyme, through='Catalyst_ec')
+    reactions = models.ManyToManyField(Reaction)
+
+    def __unicode__(self):
+        return self.number
+
+
+## Sources.  For several relationships there must be associated evidence from an analytical source or an existing metabolic model.  For each source there is a model and a foreign key in the relevant relationship.
+
+class FFPred(models.Model):
+    """Table of GO predictions for all genes in BTH."""
+    score = models.FloatField()
+    #go_term = models.ForeignKey(GO)
+    reliability = models.CharField(max_length=2)
+    #domain = models.CharField(max_length=2)
+    #description = models.CharField(max_length=200)
+    
+class iAH991(models.Model):
+    """Table of enzyme/reaction associations in iAH991."""
+    
+    function = models.CharField(max_length=1000)
+    score = models.FloatField()
+    
+class NCBI(models.Model):
+    """Table of gene(enzyme)/EC number associations."""
+    
+    score = models.FloatField()
+
+
+## Relationships
+
+class Catalyst(models.Model):
+    """Which enzymes catalyse which reactions, and which piece of evidence supports it."""
+    
+    enzyme = models.ForeignKey(Enzyme)
+    reaction = models.ForeignKey(Reaction)
+    
+    iah991 = models.ForeignKey(iAH991)
+
+class Catalyst_ec(models.Model):
+    """Which enzymes catalyse which EC numbers, and which piece of evidence supports it."""
+    
+    enzyme = models.ForeignKey(Enzyme)
+    ec = models.ForeignKey(EC)
+    
+    evidence = models.ForeignKey(NCBI)
+
+class Catalyst_go(models.Model):
+    """Which enzymes catalyse which GO terms, and which piece of evidence supports it."""
+    
+    enzyme = models.ForeignKey(Enzyme)
+    go_term = models.ForeignKey(GO)
+    
+    evidence = models.ForeignKey(FFPred) 
+    
+

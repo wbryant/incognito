@@ -1,0 +1,169 @@
+from django.core.management.base import NoArgsCommand, CommandError
+from annotation.models import GO, Reaction, Gene, FFPred_result, GO_Reaction, FFPred_prediction
+#from ffpred.extract_results import *
+import sys, os, re, shelve
+
+class Command(NoArgsCommand):
+    
+    help = 'Steps through the analysis of data from FFPred to infer the metabolic functions of all genes in the BTH genome.'
+        
+    def handle(self, **options):
+        
+        ###! For each FFPred result, get all reactions related to the
+        ###! GO term, and add them to the FFPred_prediction table,
+        ###! with appropriate scores.
+        
+        ffpred_score_cutoff = 0.5
+        
+        ##! Delete all FFPred reaction predictions (FFPred_prediction)
+        print "Deleting previous FFPred predictions ..."
+        FFPred_prediction.objects.all().delete()
+        
+        num_genes = Gene.objects.all().count()
+        
+        print 'Inferring FFPred reaction prediction data ...'
+        #Initiate counter
+        num_tot = num_genes
+        num_done = 0
+        next_progress = 1
+        sys.stdout.write("\r - %d %%" % num_done)
+        sys.stdout.flush()        
+        
+        list_of_predictions = []
+        list_preds = []
+        num_predictions_gene = {}
+        num_predictions_reaction = {}
+        
+        for gene in Gene.objects.all():
+            
+            ## Find all FFPred predictions for that gene
+            
+            #print FFPred_result.objects.filter(
+            #    gene=gene,
+            #    score__gte=ffpred_score_cutoff
+            #).count()
+            
+            prev_num_predictions = len(list_of_predictions)
+            
+            if FFPred_result.objects.filter(
+                gene=gene,
+                score__gte=ffpred_score_cutoff
+                ).count() > 0:
+                
+                results = FFPred_result.objects.filter(
+                    gene=gene,
+                    score__gte=ffpred_score_cutoff
+                    )
+                
+                
+                for result in results:
+                
+                    ## Find all reactions related to relevant GO term
+                    
+                    go = result.go_term
+                    reactions = Reaction.objects.filter(go_reaction__go=go)
+                    num_predictions_go = reactions.count()
+                    
+                    for reaction in reactions:
+                        
+                        #prediction = FFPred_prediction(
+                        #    gene=gene,
+                        #    reaction=reaction,
+                        #    ffpred_score=result.score,
+                        #    num_predictions_go=num_predictions_go,
+                        #    total_score=result.score
+                        #)
+                        
+                        list_of_predictions.append((
+                            gene,
+                            reaction,
+                            result.score,
+                            num_predictions_go,
+                            go
+                        ))
+                        
+                        #if reaction.name == "MNXR337":
+                        #    print "Reaction found: %s - %s" % (gene.gi, go.id)
+                        
+                        if reaction.name in num_predictions_reaction:
+                            num_predictions_reaction[reaction.name] += 1
+                            #if reaction.name == "MNXR337":
+                            #    print "Reaction found %d (%d) times ..." % (num_predictions_reaction[reaction.name], num_predictions_reaction["MNXR337"])
+                            #print num_predictions_reaction[reaction.name]
+                        else:
+                            num_predictions_reaction[reaction.name] = 1
+                        
+                        #list_preds.append(prediction)
+            
+            ## Count total number of predictions for gene -> num_predictions_gene
+            num_predictions_gene[gene.gi] = len(list_of_predictions) - prev_num_predictions
+            #print num_predictions_gene[gene.gi]
+            
+            ##? Do any predictions predict the same reactions?
+
+            #Counter
+            num_done += 1
+            if ((100 * num_done) / num_tot) > next_progress:
+                sys.stdout.write("\r - %d %%" % next_progress)
+                sys.stdout.flush()
+                next_progress += 1
+                
+        #Finish counter
+        sys.stdout.write("\r - 100 %\n")
+        sys.stdout.flush()
+        
+        print 'Total number of predictions = %d\n' % len(list_of_predictions)
+        
+        print "Populating FFPred prediction table ..."
+
+        #Initiate counter
+        num_tot = len(list_of_predictions)
+        num_done = 0
+        next_progress = 1
+        sys.stdout.write("\r - %d %%" % num_done)
+        sys.stdout.flush()  
+        
+        ## Add global stats (for ease of calculations)
+        for prediction in list_of_predictions:
+            #print prediction
+            ffpred_prediction = FFPred_prediction(
+                gene=prediction[0],
+                reaction=prediction[1],
+                ffpred_score=prediction[2],
+                num_predictions_go=prediction[3],
+                num_predictions_gene = num_predictions_gene[prediction[0].gi],
+                num_predictions_reaction = num_predictions_reaction[prediction[1].id],
+                total_score=prediction[2],
+                go=prediction[4]
+            )
+            
+            #print "%s: %d\t\t%s: %d\n" % (
+            #    prediction[0].gi,
+            #    num_predictions_gene[prediction[0].gi],
+            #    prediction[1].id,
+            #    num_predictions_reaction[prediction[1].id]
+            #)
+            
+            ffpred_prediction.save()
+
+            #Counter
+            num_done += 1
+            if ((100 * num_done) / num_tot) > next_progress:
+                sys.stdout.write("\r - %d %%" % next_progress)
+                sys.stdout.flush()
+                next_progress += 1
+                
+        #Finish counter
+        sys.stdout.write("\r - 100 %\n")
+        sys.stdout.flush()
+
+
+def get_locus_tag(ffpred_result):
+    
+    return ffpred_result.gene.locus_tag
+
+
+def gene2go_ffpred(gene):
+    """Input gene ID and output GO terms inferred by FFPred."""
+    
+    gos = GO.objects.filter()

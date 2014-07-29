@@ -1,0 +1,59 @@
+#This function takes the current database and uses EC numbers to combine GO and reactions, to show which GO terms relate to specific reactions.
+
+from django.core.management.base import NoArgsCommand, CommandError
+from annotation.models import Reaction, EC, EC_Reaction, GO_Reaction, GO
+import sys, re
+
+class Command(NoArgsCommand):
+    
+    help = 'Populate GO/Reaction equivalence table (via EC numbers).'
+        
+    def handle(self, **options):
+        
+        #list_of_ec_rxn = EC.objects.filter(reactions__isnull=False).filter(go_term_id__isnull=False)
+        #
+        #num_shown = 0
+        #
+        #for ec in list_of_ec_rxn[0:10]:
+        #    #print ec.number
+        #    for reaction in ec.reactions.all():
+        #        print '%s\t%s' % (ec.number, reaction.mnxref_id)
+        #        num_shown += 1
+        #        if num_shown > 49:
+        #            break
+        
+        rxns = Reaction.objects.filter(
+            ec__go_term_id__isnull=False
+        ).values_list('mnxref_id','ec__go_term_id')
+        
+        go_term_dict = {}
+        
+        mnx_dict = {}
+        
+        for rxn in rxns:
+            if rxn[0] in mnx_dict:
+                mnx_dict[rxn[0]] += 1
+            else:
+                mnx_dict[rxn[0]] = 1
+            if rxn[1] in go_term_dict:
+                go_term_dict[rxn[1]] += 1
+            else:
+                go_term_dict[rxn[1]] = 1
+            
+        
+        for term in go_term_dict:
+            if go_term_dict[term] > 10:
+                print '>10 Reactions for this GO term: %s' % term
+        
+        for mnxr in mnx_dict:
+            if mnx_dict[mnxr] > 10:
+                print '>10 GO terms for this reaction: %s' % mnxr
+                
+        num_unique = 0
+        for rxn in rxns:
+            if go_term_dict[rxn[1]] == 1:
+                if mnx_dict[rxn[0]] == 1:
+                    num_unique += 1
+        
+        print 'Number of unique GO/MNXR pairs = %d' % num_unique
+        

@@ -1,0 +1,187 @@
+from django.core.management.base import NoArgsCommand, CommandError
+from annotation.models import Metabolite, Source, Metabolite_synonym, Source
+import sys, re
+from myutils.general.utils import class_join
+
+class Command(NoArgsCommand):
+    
+    help = 'Imports data to the Metabolite table from the MNXRef chem_xref.tsv file.'
+        
+    def handle(self, **options):
+        
+        relevant_sources = ["seed", "metacyc", "kegg", "chebi", "brenda", "bigg"]
+        
+        source_precedence = {}
+        
+        source_precedence["chebi"] = 4.5
+        source_precedence["metacyc"] = 2
+        source_precedence["bigg"] = 3
+        source_precedence["seed"] = 4
+        source_precedence["kegg"] = 5
+        source_precedence["brenda"] = 6
+        
+        source_string = 'MetaNetX'
+        
+        ## Create source dictionary
+        
+        sources = Source.objects.all()
+        source_dict = {}
+        for source in sources:
+            source_dict[source.name] = source
+        
+        
+        if source_string in source_dict:
+            met_source = source_dict[source_string]
+        else:
+            met_source = Source(name = source_string)
+            met_source.save()  
+        
+        print("Deleting old MNXRef data ...")
+        Metabolite.objects.all().delete()
+        
+        f_in = open('/Users/wbryant/work/BTH/data/MNXRef/chem_xref.tsv', 'r')
+        
+        num_lines = 0
+        for line in f_in:
+            num_lines += 1
+        f_in.close()
+        f_in = open('/Users/wbryant/work/BTH/data/MNXRef/chem_xref.tsv', 'r')
+        
+        print 'Populating Metabolite, synonym and source tables ...'
+        #Initiate counter
+        num_tot = num_lines
+        num_done = 0
+        next_progress = 1
+        sys.stdout.write("\r - %d %%" % num_done)
+        sys.stdout.flush()
+        
+        mnxmet_dict = {}
+        source_dict = {}
+        synonym_dict = {}
+        dup_synonym_dict = {}
+        syn_source_dict = {}
+        
+        for line in f_in:
+            line_old = line[:]
+            line = line.strip().split('\t')
+            valid_line = True
+            
+            if (line[0][0] == '#') | (len(line) < 4):
+                #print line_old
+                valid_line = False
+            
+            try:
+                xref = line[0]
+                mnxref_id = line[1]
+                source_string, id = xref.split(":",1)
+            except:
+                #print line_old
+                valid_line = False
+            
+            if valid_line and (source_string in relevant_sources):
+                
+                try:
+                    names = line[3].split("|")
+                    names.append(id)
+                except:
+                    names = [id] 
+                
+                if source_string in source_dict:
+                    source = source_dict[source_string]
+                else:
+                    source = Source(
+                        name = source_string
+                    )
+                    source.save()
+                    source_dict[source_string] = source
+                
+                if mnxref_id in mnxmet_dict:
+                    metabolite = mnxmet_dict[mnxref_id]
+                else:
+                    metabolite = Metabolite(
+                        id = mnxref_id,
+                        name = names[0],
+                        source = met_source
+                    )
+                    try: 
+                        metabolite.save()
+                    except:
+                        print line_old
+                        sys.exit(1)
+                    mnxmet_dict[mnxref_id] = metabolite
+                
+                for name in names:
+                    
+#                     if name in dup_synonym_dict:
+#                         dup_synonym_dict[name].append(metabolite)
+#                     else:
+#                         if name in synonym_dict:
+#                             met2 = synonym_dict[name]
+#                             dup_synonym_dict[name] = [met2, metabolite]
+#                         else:
+#                             synonym_dict[name] = metabolite
+                    
+                    """Currently this does not discard duplicates from the same source - should be remedied!"""
+                    
+                    for_saving = False
+                    
+                    if name in synonym_dict:
+                        ## Name already found so check whether the new one has precedence
+                        old_syn = synonym_dict[name]
+                        
+                        if old_syn.metabolite.pk != metabolite.pk:
+                            ## If the metabolites are the same, do not do anything 
+
+                            old_source = syn_source_dict[old_syn]
+
+                            if source_precedence[source_string] < source_precedence[old_source]:
+                                for_saving = True
+                                old_syn.delete()
+                                dup_synonym_dict.pop(name, None)
+                            elif source_string == old_source:
+                                ## If the same source, add to duplicates
+                                for_saving = True 
+                                if name in dup_synonym_dict:
+                                    if metabolite not in dup_synonym_dict[name]: 
+                                        dup_synonym_dict[name].append(metabolite)
+                                else:
+                                    old_met = old_syn.metabolite
+                                    dup_synonym_dict[name] = [old_met, metabolite]
+                    else:
+                        for_saving = True
+                        
+                    if for_saving:
+                        met_syn = Metabolite_synonym(
+                            synonym = name,
+                            metabolite = metabolite,
+                            source = source
+                        )
+                        try:
+                            met_syn.save()
+                        except:
+                            #print("Long name not saved to DB ...")
+                            pass
+                        syn_source_dict[met_syn] = source_string
+                        synonym_dict[name] = met_syn
+            #Counter
+            num_done += 1
+            if ((100 * num_done) / num_tot) > next_progress:
+                sys.stdout.write("\r - %d %%" % next_progress)
+                sys.stdout.flush()
+                next_progress += 1
+        
+        f_in.close()
+        
+        #Finish counter
+        sys.stdout.write("\r - 100 %\n")
+        sys.stdout.flush()
+        
+        print("%d duplicate names in precedented DBs." % len(dup_synonym_dict))
+
+        for name in dup_synonym_dict:     
+            if len(set(dup_synonym_dict[name])) > 1:
+                source = Source.objects.filter
+                print("Name '%s' refers to multiple metabolites, so will be eliminated ..." % name)
+                print(" - %s" % class_join(dup_synonym_dict[name], ", ", "id"))
+                #Metabolite_synonym.objects.filter(synonym=name).delete()
+        

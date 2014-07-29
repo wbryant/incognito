@@ -1,0 +1,180 @@
+from django.core.management.base import NoArgsCommand, CommandError
+from annotation.models import Reaction, EC, EC_Reaction, Source
+import sys, re
+
+class Command(NoArgsCommand):
+    
+    help = 'Imports data to the Reaction table from the MNXRef downloaded xref file.'
+        
+    def handle(self, **options):
+        
+        relevant_sources = ["seed", "metacyc", "kegg", "chebi", "brenda", "bigg"]
+        
+        source_precedence = {}
+        
+        source_precedence["chebi"] = 4.5
+        source_precedence["metacyc"] = 2
+        source_precedence["bigg"] = 3
+        source_precedence["seed"] = 4
+        source_precedence["kegg"] = 5
+        source_precedence["brenda"] = 6
+        
+        source_id = 'MetaNetX'
+        
+        sources = Source.objects.all()
+        source_dict = {}
+        for source in sources:
+            source_dict[source.name] = source
+        
+        
+        if source_id in source_dict:
+            rxn_source = source_dict[source_id]
+        else:
+            rxn_source = Source(name = source_id)
+            rxn_source.save()  
+        
+        
+        Reaction.objects.filter(mnxref_id__contains='MNXR').delete()
+        EC_Reaction.objects.filter(source=source).delete()
+        EC.objects.filter(source=source).delete()
+        #EC.objects.all().delete()
+        
+        xref_file = "/Users/wbryant/work/BTH/data/metanetx/reac_xref.tsv"
+        prop_file = "/Users/wbryant/work/BTH/data/metanetx/reac_prop.tsv"
+        
+        
+        f_in = open(xref_file, 'r')
+        
+        num_lines = 0
+        for line in f_in:
+            num_lines += 1
+        f_in.close()
+        f_in = open(xref_file, 'r')
+        
+        print 'Populating Reaction table ...'
+        #Initiate counter
+        num_tot = num_lines
+        num_done = 0
+        next_progress = 1
+        sys.stdout.write("\r - %d %%" % num_done)
+        sys.stdout.flush()
+        
+        for line in f_in:
+            if line[0] != "#":
+                line_old = line[:]
+                line = line.strip().split('\t')
+                
+                source, synonym = line[0].split(":",1)
+              
+                mnxref_id = line[0]
+                seed_id = line[1]
+                bigg_id = line[2]
+                metacyc_id = line[3]
+                
+                reaction = Reaction(
+                    mnxref_id = mnxref_id,
+                    seed_id = seed_id,
+                    bigg_id = bigg_id,
+                    metacyc_id = metacyc_id,
+                    source=source
+                )
+                #print mnxref_id
+                try:
+                    reaction.save()
+                except:
+                    print '\nReaction not saved successfully: %s' % mnxref_id
+                    print '\n\nLength of MetaCyc ID: %d\n' % len(metacyc_id)
+                    print line
+                    print '%s\t%s\t%s\t%s' % (mnxref_id, seed_id, bigg_id, metacyc_id)
+                    
+                
+                #Counter
+                num_done += 1
+                if ((100 * num_done) / num_tot) > next_progress:
+                    sys.stdout.write("\r - %d %%" % next_progress)
+                    sys.stdout.flush()
+                    next_progress += 1
+        
+        f_in.close()
+        
+        #Finish counter
+        sys.stdout.write("\r - 100 %\n")
+        sys.stdout.flush()
+
+        ## Import EC relationships from MNXRef (reac_prop.tsv)
+
+        
+        f_in = open(prop_file, 'r')
+        
+        num_lines = 0
+        for line in f_in:
+            num_lines += 1
+        f_in.close()
+        f_in = open(prop_file, 'r')
+        
+        print 'Populating EC table ...'
+        #Initiate counter
+        num_tot = num_lines
+        num_done = 0
+        next_progress = 1
+        sys.stdout.write("\r - %d %%" % num_done)
+        sys.stdout.flush()
+    
+        for line in f_in:
+            line_old = line[:]
+            line = line.strip().split('\t')
+            valid_line = False
+            if line[0][0] != '#':
+                valid_line = True
+            
+            if valid_line:
+                mnxref_id = line[0]
+                #print mnxref_id
+                valid_reaction = True
+                try:
+                    reaction = Reaction.objects.get(mnxref_id=mnxref_id)
+                except:
+                    valid_reaction = False
+                
+                if valid_reaction:
+                    ecs = line[4]
+                    if len(ecs) > 0:
+                        ec_nums = ecs.strip().split(';')
+                        for ec_num in ec_nums:
+                            
+                            num_periods = ec_num.count('.')
+                    
+                            periods_needed = 3 - num_periods
+                    
+                            for i in range(0,periods_needed):
+                                ec_num += '.-'
+                            
+                            try:
+                                ec = EC.objects.get(number=ec_num)
+                            except:
+                                ec = EC(
+                                    number = ec_num,
+                                    source = source
+                                )
+                                ec.save()
+                            
+                            #Add link between EC and reaction
+                            ec_reaction = EC_Reaction(
+                                ec = ec,
+                                reaction = reaction,
+                                source = source
+                            )
+                            ec_reaction.save()
+                            
+            #Counter
+            num_done += 1
+            if ((100 * num_done) / num_tot) > next_progress:
+                sys.stdout.write("\r - %d %%" % next_progress)
+                sys.stdout.flush()
+                next_progress += 1
+        
+        f_in.close()
+        
+        #Finish counter
+        sys.stdout.write("\r - 100 %\n")
+        sys.stdout.flush()

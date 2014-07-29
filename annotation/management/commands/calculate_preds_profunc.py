@@ -1,0 +1,187 @@
+from django.core.management.base import BaseCommand, CommandError
+from myutils.general.utils import dict_append
+from annotation.models import *
+import sys, os, re
+
+
+class Command(BaseCommand):
+    
+    #help = 'COMMAND BRIEF'
+        
+    def handle(self, *args, **options):
+        
+        """ From the Profunc_predictions table infer reactions predictions for Profunc.
+            
+        """ 
+        
+        Profunc_prediction2.objects.all().delete()
+        
+        ## Cycle through command line arguments
+        num_args = 0
+        for arg in args:
+            num_args += 1
+        
+#         num_dups = GO_Reaction.objects\
+#                             .values('go_id','reaction_name','source','ec_id')\
+#                             .annotate(number=models.Count('pk'))\
+#                             .filter(number__gt=1)\
+#                             .count()
+#         
+#         print("Number of duplicates = %s" % num_dups)
+#         
+#         num_total = GO_Reaction.objects\
+#                         .values('go_id','reaction_name')\
+#                         .all()\
+#                         .count()
+#         
+#         print num_total
+#         
+        distinct_go2rxn = GO_Reaction.objects\
+                .values('go_id','reaction_name')\
+                .distinct()\
+        
+        
+        go_count = {}
+        rxn_count = {}
+        go_2f_rxn_dict = {}
+        
+        for entry in distinct_go2rxn:
+            
+            ## Populate GO to/from reaction dictionary
+            
+            dict_append(go_2f_rxn_dict, entry['go_id'], entry['reaction_name'])
+            dict_append(go_2f_rxn_dict, entry['reaction_name'], entry['go_id'])
+            
+            if entry['go_id'] in go_count:
+                go_count[entry['go_id']] += 1
+            else:
+                go_count[entry['go_id']] = 1
+            
+            if entry['reaction_name'] in rxn_count:
+                rxn_count[entry['reaction_name']] += 1
+            else:
+                rxn_count[entry['reaction_name']] = 1
+        
+        print("Number of GO terms = %d" % len(go_count))
+        print("Number of reactions = %d" % len(rxn_count))
+        
+        precise_count = 0
+        
+        for go_id in go_count:
+            if go_count[go_id] == 1:
+                precise_count += 1
+        
+        print("There are %d precise GO terms." % precise_count)
+        
+        precise_count = 0
+        
+        for reaction_name in rxn_count:
+            if rxn_count[reaction_name] == 1:
+                precise_count += 1
+                
+        print("There are %d precise reactions." % precise_count)
+        
+        
+        ###! For each result in Profunc_result, assess the GO term for usefulness and the score and if it passes, add it to predictions
+        
+        score_threshold = 40
+        go_specificity_threshold = 20
+        adjusted_score_threshold = 1
+        
+        results = Profunc_result.objects.all()
+        
+        print("Assessing results for high score predictions ...")
+        
+        ## Initiate counter
+        num_tot = len(results)
+        num_done = 0
+        next_progress = 1
+        sys.stdout.write("\r - %d %%" % num_done)
+        sys.stdout.flush()
+        
+        pred_list = [] 
+        
+        rxn_predicted_count_dict = {}
+        
+        for result in results:
+            
+            ## Does GO term have reactions associated with it?
+            if result.go_term.id in go_2f_rxn_dict:
+                
+                if result.score >= score_threshold:
+                
+                    ## Is number of reactions associated with that GO term below the threshold?
+                    if go_count[result.go_term.id] <= go_specificity_threshold:
+                        
+                        ##! Add predictions to Profunc_prediction2
+                        
+                        for id in go_2f_rxn_dict[result.go_term.id]:
+                            
+                            if id in rxn_predicted_count_dict:
+                                rxn_predicted_count_dict[id] += 1
+                            else:
+                                rxn_predicted_count_dict[id] = 1
+                            
+                            reaction = Reaction.objects.get(id=id)
+                            total_score = result.score / len(go_2f_rxn_dict[result.go_term.id])
+                            score = result.score
+                            
+                            #print("New prediction for gene %s (GO term %s), reaction %s with score %f" 
+                            #    % (result.gene, result.go_term, reaction, score))
+                            
+                            pred = Profunc_prediction2(
+                                result = result,
+                                gene = result.gene,
+                                reaction = reaction,
+                                total_score=total_score,
+                                score=score
+                                )
+                            
+                            pred_list.append(pred)
+        
+            ## Counter
+            num_done += 1
+            if ((100 * num_done) / num_tot) > next_progress:
+                sys.stdout.write("\r - %d %%" % next_progress)
+                sys.stdout.flush()
+                next_progress += 1
+                 
+        ## Finish counter
+        sys.stdout.write("\r - 100 %\n")
+        sys.stdout.flush()
+                
+        print("Adjusting scores for frequently predicted reactions ...")
+        
+        ## Initiate counter
+        
+        num_tot = len(pred_list)
+        num_done = 0
+        next_progress = 1
+        sys.stdout.write("\r - %d %%" % num_done)
+        sys.stdout.flush()
+        
+        
+        for pred in pred_list:
+            
+            num_rxn = rxn_predicted_count_dict[pred.reaction.name]
+            
+            pred.total_score = pred.total_score / num_rxn 
+            
+            pred.save()
+
+#            if pred.score > adjusted_score_threshold:
+#                 print("New prediction for gene %s (GO term %s), reaction %s (%d) with score %f" 
+#                                 % (pred.result.gene, pred.result.go_term, pred.reaction, num_rxn, pred.score))
+
+            ## Counter
+            num_done += 1
+            if ((100 * num_done) / num_tot) > next_progress:
+                sys.stdout.write("\r - %d %%" % next_progress)
+                sys.stdout.flush()
+                next_progress += 1
+                 
+        ## Finish counter
+        sys.stdout.write("\r - 100 %\n")
+        sys.stdout.flush()
+        
+        print("Number of predictions = %d" % len(pred_list))                   
