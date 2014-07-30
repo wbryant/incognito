@@ -70,7 +70,7 @@ WSGI_APPLICATION = 'incognito.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql', # Add 'postgresql_psycopg2', 'mysql', 'sqlite3' or 'oracle'.
-        'NAME': 'bth_model',                      # Or path to database file if using sqlite3.
+        'NAME': 'incognito',                      # Or path to database file if using sqlite3.
         'USER': 'wbryant',                      # Not used with sqlite3.
         'PASSWORD': 'mypass',                  # Not used with sqlite3.
         'HOST': '',                      # Set to empty string for localhost. Not used with sqlite3.
@@ -95,8 +95,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.6/howto/static-files/
 
-STATIC_ROOT = '/Users/wbryant/work/BTH/bth_model/static/'
+STATIC_ROOT = '/Users/wbryant/git/incognito/static/'
 STATIC_URL = '/static/'
 
-MEDIA_ROOT = '/Users/wbryant/work/BTH/bth_model/static/'
+MEDIA_ROOT = '/Users/wbryant/git/incognito/static/'
 MEDIA_URL = '/static/'
