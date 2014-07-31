@@ -112,7 +112,17 @@ class Enzyme_type(models.Model):
     type = models.CharField(max_length=40, unique=True)
     description = models.CharField(max_length=1000, default = '')
     
-
+class Reaction_preds(models.Model):
+    """What reactions are predicted to be present in a dev (development) organism 
+    from a ref (reference) model?
+    N.B. The dev model can be deduced from which reaction (Model_reaction) is predicted.
+    """
+    
+    dev_organism = models.ForeignKey(Organism)
+    reaction = models.ForeignKey('annotation.Model_reaction')
+    
+    num_enzymes = models.IntegerField()
+    enzyme_type = models.ForeignKey(Enzyme_type)
    
     
     
