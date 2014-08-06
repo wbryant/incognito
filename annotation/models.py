@@ -6,6 +6,9 @@ class Source(models.Model):
     
     name = models.CharField(max_length=50, primary_key = True)
     
+    ## For metabolic models, state which organism the model is for
+    organism = models.ForeignKey('cogzymes.Organism', blank=True, null=True, default=None)
+    
     def __unicode__(self):
         return self.name
     

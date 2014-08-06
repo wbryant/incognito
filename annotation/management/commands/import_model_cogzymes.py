@@ -390,7 +390,10 @@ class Command(BaseCommand):
         try:
             source = Source.objects.get(name=source_name)
         except:
-            source = Source(name=source_name)
+            source = Source(
+                name=source_name,
+                organism=organism
+            )
             source.save()
         
 

@@ -7,9 +7,9 @@ Created on 11 Mar 2014
 from django.db.models import Count, F, Q, Avg, Max
 
 import sys, os
-sys.path.append("/Users/wbryant/work/BTH/bth_model")
-sys.path.append("/Users/wbryant/work/BTH/bth_model/annotation")
-os.environ["DJANGO_SETTINGS_MODULE"] = "bth_model.settings"
+sys.path.append("/Users/wbryant/work/BTH/incognito")
+sys.path.append("/Users/wbryant/work/BTH/incognito/annotation")
+os.environ["DJANGO_SETTINGS_MODULE"] = "incognito.config.settings"
 #from annotation.models import Reaction, Metabolite, Stoichiometry
 # from annotation.models import Reaction, Metabolite, Stoichiometry, Model_reaction
 
