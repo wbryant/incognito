@@ -387,8 +387,12 @@ class Command(BaseCommand):
         ## Create source
         
         source_name = G.model_id
+        print("Source name is: {}".format(source_name))
         try:
             source = Source.objects.get(name=source_name)
+            if not source.organism:
+                source.organism = organism
+                source.save()
         except:
             source = Source(
                 name=source_name,
