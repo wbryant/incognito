@@ -39,7 +39,7 @@ DEFAULT_APPS = (
 )
 
 THIRD_PARTY_APPS = (
-    'South',
+    'south',
     'django_extensions'
 )
 

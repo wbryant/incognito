@@ -117,17 +117,17 @@ class Reaction_preds(models.Model):
     from a ref (reference) model?
     N.B. The dev model can be deduced from which reaction (Model_reaction) is predicted.
     """
-
+ 
     status_choices = (
         ('add','add'),
         ('rem','remove')
     )
-        
+         
     dev_organism = models.ForeignKey(Organism)
     reaction = models.ForeignKey('annotation.Model_reaction')
-    
+     
     status = models.CharField(max_length=3, choices=status_choices, default='add')
-    
+     
     num_enzymes = models.IntegerField()
     enzyme_type = models.ForeignKey(Enzyme_type)
    

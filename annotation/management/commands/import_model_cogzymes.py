@@ -399,8 +399,8 @@ class Command(BaseCommand):
 
         ## Remove previous information from this source
         
-        Model_metabolite.objects.filter(source=source, curated_db_link=False).delete()
-        Model_reaction.objects.filter(source=source, curated_db_link=False).delete()
+        #Model_metabolite.objects.filter(source=source, curated_db_link=False).delete()
+        #Model_reaction.objects.filter(source=source, curated_db_link=False).delete()
         
         
         met_dict = {}
