@@ -576,16 +576,15 @@ class Command(BaseCommand):
                                 cogzyme = Cogzyme(
                                     name = cogzyme_name,
                                 )
-                                cogzyme.save()
-                                
-                                cogzyme.enzymes.add(enzyme)
                                 
                                 for cog in cog_list:
                                     cogzyme.cogs.add(cog)
                                 
+                                cogzyme.save()
+                                
                                 name_cogzyme_dict[cogzyme_name] = cogzyme
                                 
-                            
+                            cogzyme.enzymes.add(enzyme)
                 
         counter.stop()
         
