@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand, CommandError
-from cogzymes.models import Cog, Cogzyme, Gene, Enzyme, Cogzyme, Enzyme_type, Reaction_preds
+from cogzymes.models import Cog, Cogzyme, Gene, Enzyme, Cogzyme, Enzyme_type, Reaction_pred
 from annotation.models import Source, Model_reaction
 import sys, os, re
 
@@ -12,10 +12,10 @@ def create_cog_type_dict(source):
     organism_cogs = []
     model_cogs = []
     
-    for cog in Cog.objects.filter(gene_set__organism=source.organism).distinct():
+    for cog in Cog.objects.filter(gene__organism=source.organism).distinct():
         organism_cogs.append(cog)
         
-    for cog in Cog.objects.filter(cogzyme_set__enzymes__source=source).distinct():
+    for cog in Cog.objects.filter(cogzyme__enzymes__source=source).distinct():
         model_cogs.append(cog)
         
     for cog in organism_cogs:
@@ -33,7 +33,7 @@ def cogzyme_in_model(cogzyme, cog_type_dict):
     done using cogTypeDict for specific model?
     """
     
-    cogs = [cog for cog in cogzyme.cogs]
+    cogs = [cog for cog in cogzyme.cogs.all()]
     
     cogzyme_model = True
     
@@ -48,7 +48,26 @@ def cogzyme_in_model(cogzyme, cog_type_dict):
         return 'model'
     else:
         return 'genome'
+
+def create_reaction_prediction(reaction, addrem, organism, cogzyme):
+    """
+    Create Reaction_pred from details
+    """
     
+    reaction_pred = Reaction_pred(
+        dev_organism = organism,
+        reaction = reaction,
+        status = addrem,
+        num_enzymes = 0,
+        cogzyme = cogzyme
+    )
+    try:
+        reaction_pred.save()
+    except:
+        print("Reaction prediction '{}' for '{}' failed to save ..."
+              .format(pred[0].name, ref_cogzyme.name))
+    
+
 class Command(BaseCommand):
     
     help = 'Find all reactions inferred by InCOGnito between a reference and a development model.'
@@ -56,6 +75,11 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         
         """ Find all reactions inferred by InCOGnito between a reference and a development model.
+            
+            N.B. Reactions are currently limited by:
+            1)    Lack of manual mappings (all done via MNX),
+            2)    Reactions will only be exported if MNX reaction found
+            
             
         """ 
         
@@ -74,6 +98,7 @@ class Command(BaseCommand):
         try:
             dev_source = Source.objects.get(name=dev_id)
             num_reactions = Model_reaction.objects.filter(source=dev_source).count()
+            dev_organism = dev_source.organism
             print("Development model, ID {}, found, containing {} reactions ...".format(dev_id, num_reactions))
         except:
             print("Development Source could not be found, exiting ...")
@@ -81,7 +106,7 @@ class Command(BaseCommand):
         try:
             ref_source = Source.objects.get(name=ref_id)
             num_reactions = Model_reaction.objects.filter(source=ref_source).count()
-            print("Reference model, ID {}, found, containing {} reactions ...".format(dev_id, num_reactions))
+            print("Reference model, ID {}, found, containing {} reactions ...".format(ref_id, num_reactions))
         except:
             print("Reference Source could not be found, exiting ...")
 
@@ -90,33 +115,66 @@ class Command(BaseCommand):
         
         dev_cog_types = create_cog_type_dict(dev_source)
         
+        dev_rxns_full = [rxn for rxn in Model_reaction.objects.filter(source = dev_source).distinct()]
         
         ## For each cogzyme in the ref_model, can the dev_genome make it?
         
         for ref_cogzyme in Cogzyme.objects.filter(enzymes__source=ref_source).distinct():
+            
             ref_cogzyme_type = cogzyme_in_model(ref_cogzyme, dev_cog_types)
+            
+            #print ref_cogzyme.name, ref_cogzyme_type
             
             if ref_cogzyme_type == 'model':
                 ## cogzyme possible with genes already in the model
                 
-                if dev_source in ref_cogzyme.enzymes.source
+                if ref_cogzyme.enzymes.filter(source=dev_source):
+                    ## Already in model - KNOWN
+        
+                    
+                    ## Find rxns missing in dev_model
+                    ref_rxns_missing_in_dev = [(rxn, 'add') for rxn in Model_reaction.objects
+                                               .filter(cog_enzymes__cogzyme=ref_cogzyme, source=ref_source, db_reaction__isnull=False)
+                                               .exclude(db_reaction__model_reaction__source=dev_source)
+                                               .distinct()]
+                    
+                    print ref_rxns_missing_in_dev
+                    
+                    ## Those only in dev
+                    dev_rxns_extra = [(rxn, 'rem') for rxn in Model_reaction.objects
+                                               .filter(cog_enzymes__cogzyme=ref_cogzyme, source=dev_source, db_reaction__isnull=False)
+                                               .exclude(db_reaction__model_reaction__source=ref_source)
+                                               .distinct()]
+                
+                    
+                    ## Add predictions
+                    
+                    all_preds = ref_rxns_missing_in_dev + dev_rxns_extra
+                    for pred in all_preds:
+                        create_reaction_prediction(pred[0], pred[1], dev_organism, ref_cogzyme)
+                    
+                    pass
+                
+                else:
+                    ## Can be created from model genes - SUSPECT
+                    
+                    ## Look at ref_reactions and if they are not present in dev_model add them to reaction_preds
+                    
+                    ## Find rxns missing in dev_model
+                    suspect_preds = [(rxn, 'add') for rxn in Model_reaction.objects
+                                               .filter(cog_enzymes__cogzyme=ref_cogzyme, source=ref_source, db_reaction__isnull=False)
+                                               .exclude(db_reaction__model_reaction__source=dev_source)
+                                               .distinct()]
+                    
+                    for pred in suspect_preds:
+                        create_reaction_prediction(pred[0], pred[1], dev_organism, ref_cogzyme)
+                    
+                    pass
             
-        
-        ## if it can:
-        
-        ## - if it is already a cogzyme in dev_model:
-        
-        ## - - find rxns missing in dev_model and add to reaction_preds
-        
-        ## - - find rxns only in dev_model and add to reaction_preds
-        
-        ## - elif all cogs in dev_model (suspect):
-        
-        ## - - look at ref_reactions and if they are not present in dev_model add them to reaction_preds 
-        
-        ## - elif all cogs in dev_genome (hidden):
-
-        ## - - look at ref_reactions and if they are not present in dev_model add them to reaction_preds 
+            elif ref_cogzyme_type == 'genome':
+                ## Can be created from genome genes
                 
+                ## Look at ref_reactions and if they are not present in dev_model add them to reaction_preds 
                 
-                
+                pass
+            
