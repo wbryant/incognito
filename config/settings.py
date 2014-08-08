@@ -40,12 +40,12 @@ DEFAULT_APPS = (
 
 THIRD_PARTY_APPS = (
     'south',
-    'django_extensions'
+    'django_extensions',
 )
 
 LOCAL_APPS = (
     'annotation',
-    'cogzymes'
+    'cogzymes',
 )
 
 INSTALLED_APPS = DEFAULT_APPS + THIRD_PARTY_APPS + LOCAL_APPS
