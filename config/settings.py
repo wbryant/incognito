@@ -98,5 +98,5 @@ USE_TZ = True
 STATIC_ROOT = '/Users/wbryant/git/incognito/static/'
 STATIC_URL = '/static/'
 
-MEDIA_ROOT = '/Users/wbryant/git/incognito/static/'
-MEDIA_URL = '/static/'
+MEDIA_ROOT = '/Users/wbryant/git/incognito/media/'
+MEDIA_URL = '/media/'
