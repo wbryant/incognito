@@ -112,7 +112,7 @@ class Enzyme_type(models.Model):
     type = models.CharField(max_length=40, unique=True)
     description = models.CharField(max_length=1000, default = '')
     
-class Reaction_preds(models.Model):
+class Reaction_pred(models.Model):
     """What reactions are predicted to be present in a dev (development) organism 
     from a ref (reference) model?
     N.B. The dev model can be deduced from which reaction (Model_reaction) is predicted.
@@ -129,8 +129,9 @@ class Reaction_preds(models.Model):
     status = models.CharField(max_length=3, choices=status_choices, default='add')
      
     num_enzymes = models.IntegerField()
-    enzyme_type = models.ForeignKey(Enzyme_type)
-   
+    enzyme_type = models.ForeignKey(Enzyme_type, blank=True, null=True, default=None)
+    
+    cogzyme = models.ForeignKey(Cogzyme, blank=True, null=True, default=None)
     
     
     
