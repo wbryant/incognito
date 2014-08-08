@@ -49,23 +49,25 @@ def cogzyme_in_model(cogzyme, cog_type_dict):
     else:
         return 'genome'
 
-def create_reaction_prediction(reaction, addrem, organism, cogzyme):
+def create_reaction_prediction(reaction, addrem, dev_source, ref_source, cogzyme, type):
     """
     Create Reaction_pred from details
     """
     
     reaction_pred = Reaction_pred(
-        dev_organism = organism,
+        dev_model = dev_source,
+        ref_model = ref_source,
         reaction = reaction,
         status = addrem,
         num_enzymes = 0,
-        cogzyme = cogzyme
+        cogzyme = cogzyme,
+        type = type
     )
     try:
         reaction_pred.save()
     except:
         print("Reaction prediction '{}' for '{}' failed to save ..."
-              .format(pred[0].name, ref_cogzyme.name))
+              .format(reaction.name, cogzyme.name))
     
 
 class Command(BaseCommand):
@@ -106,16 +108,21 @@ class Command(BaseCommand):
         try:
             ref_source = Source.objects.get(name=ref_id)
             num_reactions = Model_reaction.objects.filter(source=ref_source).count()
+            ref_organism = ref_source.organism
             print("Reference model, ID {}, found, containing {} reactions ...".format(ref_id, num_reactions))
         except:
             print("Reference Source could not be found, exiting ...")
-
+        
+        
+        ## Delete any previous inferences from these dev and ref models
+        
+        Reaction_pred.objects.filter(dev_model=dev_source,ref_model=ref_source).delete()
         
         ## Create dict of cogs saying whether they are in dev_model or just in dev_genome
         
         dev_cog_types = create_cog_type_dict(dev_source)
         
-        dev_rxns_full = [rxn for rxn in Model_reaction.objects.filter(source = dev_source).distinct()]
+#         dev_rxns_full = [rxn for rxn in Model_reaction.objects.filter(source = dev_source).distinct()]
         
         ## For each cogzyme in the ref_model, can the dev_genome make it?
         
@@ -138,8 +145,7 @@ class Command(BaseCommand):
                                                .exclude(db_reaction__model_reaction__source=dev_source)
                                                .distinct()]
                     
-                    print ref_rxns_missing_in_dev
-                    
+        
                     ## Those only in dev
                     dev_rxns_extra = [(rxn, 'rem') for rxn in Model_reaction.objects
                                                .filter(cog_enzymes__cogzyme=ref_cogzyme, source=dev_source, db_reaction__isnull=False)
@@ -151,7 +157,7 @@ class Command(BaseCommand):
                     
                     all_preds = ref_rxns_missing_in_dev + dev_rxns_extra
                     for pred in all_preds:
-                        create_reaction_prediction(pred[0], pred[1], dev_organism, ref_cogzyme)
+                        create_reaction_prediction(pred[0], pred[1], dev_source, ref_source, ref_cogzyme, 'mod')
                     
                     pass
                 
@@ -167,7 +173,7 @@ class Command(BaseCommand):
                                                .distinct()]
                     
                     for pred in suspect_preds:
-                        create_reaction_prediction(pred[0], pred[1], dev_organism, ref_cogzyme)
+                        create_reaction_prediction(pred[0], pred[1], dev_source, ref_source, ref_cogzyme, 'sus')
                     
                     pass
             
@@ -175,6 +181,15 @@ class Command(BaseCommand):
                 ## Can be created from genome genes
                 
                 ## Look at ref_reactions and if they are not present in dev_model add them to reaction_preds 
+                
+                hidden_preds = [(rxn, 'add') for rxn in Model_reaction.objects
+                                           .filter(cog_enzymes__cogzyme=ref_cogzyme, source=ref_source, db_reaction__isnull=False)
+                                           .exclude(db_reaction__model_reaction__source=dev_source)
+                                           .distinct()]
+                
+                for pred in hidden_preds:
+                    create_reaction_prediction(pred[0], pred[1], dev_source, ref_source, ref_cogzyme, 'hid')
+                
                 
                 pass
             
