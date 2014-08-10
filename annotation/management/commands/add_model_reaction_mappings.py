@@ -55,10 +55,11 @@ class Command(BaseCommand):
             sys.exit(1)
         
         
-        ## Get current mapping as dictionary of tuples
+        ### Get current mapping as dictionary of tuples
         
         mapping_dict = {}
         
+        ## MNX mapping
         for mapped_id_pair in Model_reaction.objects\
                             .filter(source=source_1,db_reaction__model_reaction__source=source_2)\
                             .values_list('model_id','db_reaction__model_reaction__model_id'):
@@ -69,8 +70,21 @@ class Command(BaseCommand):
             
             mapping_dict[model_1_tuple] = model_2_tuple
             mapping_dict[model_2_tuple] = model_1_tuple
+        
+        ## Non-MNX mapping (through Reaction_groups)
+        for mapped_id_pair in Model_reaction.objects\
+                            .filter(source=source_1,model_group__model_reaction__source=source_2)\
+                            .values_list('model_id','model_group__model_reaction__model_id'):
             
-        ## for each mapping:
+            model_1_tuple = (mapped_id_pair[0],source_1.name)
+            model_2_tuple = (mapped_id_pair[1],source_2.name)
+            
+            
+            mapping_dict[model_1_tuple] = model_2_tuple
+            mapping_dict[model_2_tuple] = model_1_tuple
+        
+        
+        ### Run through each mapping in the file
         
         for line in f_in:
             
@@ -102,11 +116,22 @@ class Command(BaseCommand):
             ## if IDs are not already mapped through Model_reaction_mapping or MNX, 
             ## to either each other or other reactions in same 2 models:
             
-            pass
+            rxn_1_tuple = (rxn_1.model_id, source_1.name)
+            rxn_2_tuple = (rxn_2.model_id, source_2.name)
             
-            
-        ## - - - add a mapping between the two reactions.
-        
+            if (not(rxn_1_tuple in mapping_dict) and 
+                not(rxn_2_tuple in mapping_dict)):
+                
+                mapping_dict[rxn_1_tuple] = rxn_2_tuple
+                mapping_dict[rxn_2_tuple] = rxn_1_tuple
+                
+                ## if neither rxn is in a group, create a new group and add them
+                
+                ## elif one rxn is already in a group, add the other reaction
+                
+                ## elif both rxns are in groups, merge the groups
+                
+                
         
         
         

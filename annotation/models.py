@@ -558,10 +558,11 @@ class Model_reaction(models.Model):
     products = models.ManyToManyField(Model_metabolite, related_name = 'products_related')
     metabolites = models.ManyToManyField(Model_metabolite, related_name = 'metabolites_related')
     curated_db_link = models.BooleanField(default=True)
-    mapping = models.ManyToManyField('Model_reaction_mapping', blank=True, null=True, default=None, through='Model_reaction_to_mapping')
+    mapping = models.ManyToManyField('Reaction_group', blank=True, null=True, default=None, 
+                                     through='Mapping')
     
     def __unicode__(self):
-        return "{:15} ({})".format(self.model_id, self.name)
+        return "{:10} ({})".format(self.model_id, self.name)
 
     def metprint(self):
         """
@@ -602,20 +603,32 @@ class Method(models.Model):
     
     name = models.CharField(max_length=100)
 
-class Model_reaction_mapping(models.Model):
+class Reaction_group(models.Model):
     """
-    A mapped reaction, linked to a reaction from at least 2 models from Model_reaction.
+    A group of mapped reactions, linked to a reaction from at least 2 models from Model_reaction.
     
     This should be used in the case where reactions cannot be mapped to MNX reactions.
     """
     
     name = models.CharField(max_length=100,default='')
+    
+    def __unicode__(self):
+        return self.name
 
-class Model_reaction_to_mapping(models.Model):
-    """
+class Mapping(models.Model):
+    """through table noting the method used to map the reactions to the group 
     
     """
     
-    model_reaction_mapping = models.ForeignKey(Model_reaction_mapping)
-    model_reaction = models.ForeignKey(Model_reaction)
+    group = models.ForeignKey(Reaction_group)
+    reaction = models.ForeignKey(Model_reaction, 
+                                 related_name = 'reaction_mapped')
     method = models.ForeignKey(Method)
+    
+    def __unicode__(self):
+        return "Reaction {} ({}) -> Group '{}' ({} method)".format(
+                                                self.reaction.model_id,
+                                                self.reaction.source.name,
+                                                self.group.name,
+                                                self.method.name
+                                                )
