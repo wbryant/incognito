@@ -1,5 +1,9 @@
 from django.core.management.base import BaseCommand, CommandError
-from annotation.models import Compartment, Reaction, Evidence, Catalyst, EC, EC_Reaction, Source, Reaction_synonym, Model_reaction, Model_metabolite, Metabolite_synonym, Metabolite
+from annotation.models import Compartment, Reaction, Evidence, Catalyst, EC,\
+                                EC_Reaction, Source, Reaction_synonym,\
+                                Model_reaction, Model_metabolite,\
+                                Metabolite_synonym, Metabolite,\
+                                Reaction_group, Method, Mapping
 from cogzymes.models import Organism, Gene, Cog, Cogzyme, Enzyme, Enzyme_type
 from annotation.management.commands.model_integration_tools import get_synonym_met_db, get_subsynonyms
 from myutils.general.gene_parser import gene_parser
@@ -403,9 +407,11 @@ class Command(BaseCommand):
 
         ## Remove previous information from this source
         
-        #Model_metabolite.objects.filter(source=source, curated_db_link=False).delete()
-        #Model_reaction.objects.filter(source=source, curated_db_link=False).delete()
+        print("Deleting previous entries for this model (curated model mappings will need to be re-added ...")
         
+        Model_metabolite.objects.filter(source=source, curated_db_link=False).delete()
+        Model_reaction.objects.filter(source=source, curated_db_link=False).delete()
+        Enzyme.objects.filter(source=source).delete()
         
         met_dict = {}
         rxn_dict = {}
@@ -670,7 +676,7 @@ class Command(BaseCommand):
             for idx in subs_list:
                 met = met_dict[G.node[idx]['id']]    
                 rxn.substrates.add(met)
-            
+
 #             print rxn.name
 #             print subs_list
 #             print prod_list
@@ -679,11 +685,56 @@ class Command(BaseCommand):
             
             rxn.save()                
             
-        
+            
         ## Map reactions by metprints
         
-        map_reaction_metprints(source_name)
+        map_reaction_metprints(source_name)        
+        
+        
+        ## Mapped reactions must also be added to Reaction Groups (method 'MNX', name=MNX_ID)
+        
+        try:
+            method = Method.objects.get(name='MNX')
+        except:
+            method = Method(name='MNX')
+            method.save()
+        
+        counter = loop_counter(Model_reaction.objects
+                                        .filter(source=source, 
+                                                db_reaction__isnull=False)
+                                        .count(), 
+                                        "Adding mapped reactions to Groups ...")
+        
+        for rxn in Model_reaction.objects.filter(source=source, 
+                                                 db_reaction__isnull=False):
             
+            counter.step()
+            
+            try:
+                group = Reaction_group.objects.get(model_reaction=rxn)
+            except:
+                try:
+                    group = Reaction_group.objects.filter(model_reaction__db_reaction=rxn.db_reaction).distinct()[0]
+                except:
+                    group = Reaction_group(
+                        name= "{} from {}".format(
+                            rxn.db_reaction.name,
+                            rxn.db_reaction.source.name
+                        )
+                    )
+                    
+                    group.save()
+                    
+                mapping = Mapping(
+                    reaction = rxn,
+                    group = group,
+                    method = method
+                )
+                
+                mapping.save()
+        
+        counter.stop()
+ 
         print("Completed model import.\n")
         
         genes_not_found = sorted(list(set(genes_not_found)))

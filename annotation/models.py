@@ -627,8 +627,8 @@ class Mapping(models.Model):
     
     def __unicode__(self):
         return "Reaction {} ({}) -> Group '{}' ({} method)".format(
-                                                self.reaction.model_id,
-                                                self.reaction.source.name,
-                                                self.group.name,
-                                                self.method.name
-                                                )
+            self.reaction.model_id,
+            self.reaction.source.name,
+            self.group.name,
+            self.method.name
+        )
