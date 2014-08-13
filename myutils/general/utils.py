@@ -2,6 +2,15 @@ import sys
 import shelve
 from ast import literal_eval
 
+def preview_dict(in_dict, limit = 10):
+    num_shown = 0
+    for key in in_dict:
+        value = in_dict[key]
+        print("{:15}  -> {}".format(key, value))
+        num_shown += 1
+        if num_shown == limit:
+            break
+
 def f_measure_tf(tp,tn,fp,fn):
     try:
         precision = tp / float(tp+fp)

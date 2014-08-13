@@ -295,6 +295,8 @@ class Command(BaseCommand):
         G = import_sbml(model_file_in, add_cogzymes)
         
         
+        
+        
         ## If COGzymes are being imported, make preparations
         
         if add_cogzymes:
@@ -582,11 +584,10 @@ class Command(BaseCommand):
                                 cogzyme = Cogzyme(
                                     name = cogzyme_name,
                                 )
+                                cogzyme.save()
                                 
                                 for cog in cog_list:
                                     cogzyme.cogs.add(cog)
-                                
-                                cogzyme.save()
                                 
                                 name_cogzyme_dict[cogzyme_name] = cogzyme
                                 

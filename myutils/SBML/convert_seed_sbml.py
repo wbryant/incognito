@@ -10,6 +10,7 @@ Take MTG gene file and SBML file, and convert pegs to gene loci
 import re, sys
 from copy import deepcopy
 from myutils.bio.online import get_loci_from_protein_gis
+from myutils.general.utils import preview_dict
 
 def create_peg_locus_dict_from_rast(rastfile, locus_pattern):
     """
@@ -56,7 +57,6 @@ def create_peg_locus_dict_from_rast(rastfile, locus_pattern):
     
     return peg_locus_dict
     
-
 def import_genbank_gi_locus_dictionary(genbank_file):
     """
     Create a dictionary of GI, gene locus pairs from a GenBank Nucleotide file.
@@ -92,7 +92,6 @@ def import_genbank_gi_locus_dictionary(genbank_file):
 #     print("")
     
     return gi_locus_dict
-
         
 def import_peg_gi_dictionary(gene_text_file, taxonomy_id, peg_prefix = 'Seed'):
     """
@@ -162,15 +161,6 @@ def merge_dicts(a_b, b_c):
     
     return a_c_dict, a_b_unfound_dict
 
-def preview_dict(in_dict, limit = 10):
-    num_shown = 0
-    for key in in_dict:
-        value = in_dict[key]
-        print("{:15}  -> {}".format(key, value))
-        num_shown += 1
-        if num_shown == limit:
-            break
-
 def interpolate_gene_loci(peg_locus_dict_in):
     """
     Add missing peg > locus pairs from calculated dictionary. 
@@ -224,10 +214,6 @@ def interpolate_gene_loci(peg_locus_dict_in):
     
     return peg_locus_dict 
             
-        
-        
-        
-        
 if __name__ == '__main__':
     
     ## Get species ID

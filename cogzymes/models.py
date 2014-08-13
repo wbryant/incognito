@@ -16,7 +16,7 @@ class Cog(models.Model):
     name = models.CharField(max_length=20, unique=True)
     
     def __unicode__(self):
-        return "%s" % self.id
+        return "{}".format(self.name)
 
 
 class Gene(models.Model):
@@ -103,7 +103,7 @@ class Cogzyme(models.Model):
     enzymes = models.ManyToManyField(Enzyme)
     
     def __unicode__(self):
-        return "<Cogzyme (COGs: %s)>" % self.name
+        return "'{}'".format(self.name)
 
 
 class Enzyme_type(models.Model):
