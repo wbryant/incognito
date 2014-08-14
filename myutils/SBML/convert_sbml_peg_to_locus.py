@@ -90,7 +90,7 @@ def import_dict_from_iBSU1103_file(file_name = None):
         locus_tag = re.findall(BSU_pattern, synonyms)
         
         if len(locus_tag) == 1:
-            peg_locus_dict[peg_id] = locus_tag[0]
+            peg_locus_dict[peg_id] = locus_tag[0].upper() + '0'
     
     f_in.close()
     
@@ -98,15 +98,13 @@ def import_dict_from_iBSU1103_file(file_name = None):
                     
 if __name__ == '__main__':
       
-#     ## BSU conversion
-#     peg_locus_dict = import_dict_from_iBSU1103_file()
-#     
-# #     preview_dict(peg_locus_dict)
-#     
-# #     ## Convert original iBsu1103 model
-# #     convert_file(peg_locus_dict,
-# #         sbml_file = '/Users/wbryant/work/cogzymes/models/BSU_iBsu1103_sbrg - PEGs.xml')
-#     
+    ## BSU conversion
+    peg_locus_dict = import_dict_from_iBSU1103_file()
+     
+    ## Convert original iBsu1103 model
+    convert_file(peg_locus_dict,
+        sbml_file = '/Users/wbryant/work/cogzymes/models/BSU_iBsu1103_sbrg - PEGs.xml')
+   
 #     ## Convert Model SEED raw BSU model
 #     convert_file(peg_locus_dict, peg_pattern = '[0-9]+\.[0-9]+\.(peg\.[0-9]+)', 
 #         sbml_file = '/Users/wbryant/work/cogzymes/models/Seed224308.1.xml')
