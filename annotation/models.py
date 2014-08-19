@@ -10,7 +10,10 @@ class Source(models.Model):
     organism = models.ForeignKey('cogzymes.Organism', blank=True, null=True, default=None)
     
     def __unicode__(self):
-        return self.name
+        if not self.organism:
+            return self.name
+        else:
+            return "{} (Model for organism {})".format(self.name, self.organism.taxonomy_id)
     
 ## Entities
 class Gene(models.Model):

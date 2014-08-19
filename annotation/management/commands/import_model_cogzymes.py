@@ -380,7 +380,7 @@ class Command(BaseCommand):
         counter.stop()
 
 
-        ## Get dictionary of unambiguous synonyms to relate model metabolites to DB metabolites.
+        ## Get dictionary of unambiguous synonyms to relate model reactions to DB reactions.
         
         counter = loop_counter(Reaction_synonym.objects.all().count(),'Getting reaction synonyms ...')
         synonym_db_rxn_dict = {}
@@ -560,7 +560,7 @@ class Command(BaseCommand):
                                     type = ez_type
                                 )
                                 enzyme.save()
-                            name_enzyme_dict[enzyme_name] = enzyme
+                                name_enzyme_dict[enzyme_name] = enzyme
 
 
                             ## Add reaction and genes to enzyme
@@ -580,11 +580,20 @@ class Command(BaseCommand):
                             if cogzyme_name in name_cogzyme_dict:
                                 cogzyme = name_cogzyme_dict[cogzyme_name]
                             else:
-                                
+
+                                if len(cogzyme_name) > 255:
+                                    full_name = deepcopy(cogzyme_name)
+                                    cogzyme_name = cogzyme_name[0:254]
+                                                                    
                                 cogzyme = Cogzyme(
                                     name = cogzyme_name,
                                 )
-                                cogzyme.save()
+                                
+                                try:
+                                    cogzyme.save()
+                                except:
+                                    print("Long name uniqueness error for name '{}'.".format(full_name))
+                                    continue
                                 
                                 for cog in cog_list:
                                     cogzyme.cogs.add(cog)
@@ -701,38 +710,35 @@ class Command(BaseCommand):
             method.save()
         
         counter = loop_counter(Model_reaction.objects
-                                        .filter(source=source, 
-                                                db_reaction__isnull=False)
-                                        .count(), 
-                                        "Adding mapped reactions to Groups ...")
+            .filter(source=source, db_reaction__isnull=False).count(), 
+            "Adding mapped reactions to Groups ...")
         
-        for rxn in Model_reaction.objects.filter(source=source, 
-                                                 db_reaction__isnull=False):
+        for rxn in Model_reaction.objects.filter(
+            source=source, 
+            db_reaction__isnull=False):
             
             counter.step()
             
+
             try:
-                group = Reaction_group.objects.get(model_reaction=rxn)
+                group = Reaction_group.objects.filter(model_reaction__db_reaction=rxn.db_reaction).distinct()[0]
             except:
-                try:
-                    group = Reaction_group.objects.filter(model_reaction__db_reaction=rxn.db_reaction).distinct()[0]
-                except:
-                    group = Reaction_group(
-                        name= "{} from {}".format(
-                            rxn.db_reaction.name,
-                            rxn.db_reaction.source.name
-                        )
+                group = Reaction_group(
+                    name= "{} from {}".format(
+                        rxn.db_reaction.name,
+                        rxn.db_reaction.source.name
                     )
-                    
-                    group.save()
-                    
-                mapping = Mapping(
-                    reaction = rxn,
-                    group = group,
-                    method = method
                 )
                 
-                mapping.save()
+                group.save()
+                
+            mapping = Mapping(
+                reaction = rxn,
+                group = group,
+                method = method
+            )
+            
+            mapping.save()
         
         counter.stop()
  
