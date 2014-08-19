@@ -718,19 +718,21 @@ class Command(BaseCommand):
             db_reaction__isnull=False):
             
             counter.step()
-            
 
             try:
                 group = Reaction_group.objects.filter(model_reaction__db_reaction=rxn.db_reaction).distinct()[0]
             except:
-                group = Reaction_group(
-                    name= "{} from {}".format(
-                        rxn.db_reaction.name,
-                        rxn.db_reaction.source.name
-                    )
-                )
+                group_name = "{} from {}".format(
+                    rxn.db_reaction.name,
+                    rxn.db_reaction.source.name)
                 
-                group.save()
+                try:
+                    group = Reaction_group.objects.get(name = group_name)
+                except:
+                    group = Reaction_group(
+                        name = group_name
+                    )
+                    group.save()
                 
             mapping = Mapping(
                 reaction = rxn,
