@@ -213,42 +213,14 @@ def interpolate_gene_loci(peg_locus_dict_in):
 #     print("{} relations added to dictionary.".format(len(peg_locus_dict)-num_old))
     
     return peg_locus_dict 
-            
-if __name__ == '__main__':
-    
-    ## Get species ID
-    
-    
-    
-    ## M. smegmatis model
-#     peg_prefix = 'Seed'    
-#     sbml_file = '/Users/wbryant/work/cogzymes/models/Seed246196.1.25442.xml'
-#     sbml_file = '/Users/wbryant/work/cogzymes/models/Seed246196.19.25442.xml'
-#     species_genbank_file = '/Users/wbryant/work/cogzymes/data/genbank/MSM_246196.gb'
-    
-    ## BTH model
-#     peg_prefix = 'Seed'    
-#     sbml_file = '/Users/wbryant/work/cogzymes/models/Seed246196.19.25442.xml'
-#     species_genbank_file = '/Users/wbryant/work/cogzymes/data/genbank/MSM_246196.gb'
 
-    ## BSU model
-    peg_prefix = 'Opt'    
-    sbml_file = '/Users/wbryant/work/cogzymes/models/Seed224308.1.xml'
-    species_genbank_file = '/Users/wbryant/work/cogzymes/data/genbank/BSU_224308.gb'
-    locus_pattern = "BSU[0-9]+"
-
-    
-    gene_text_file = '/Users/wbryant/work/mindthegap/MIND_THE_GAP/Template/static/Tables/MODELS_genes.txt'
-    
-    outfile = re.sub('\.([^\.]+)$','.locus.\g<1>',sbml_file)
-    
-    print("Output file: '{}'\n".format(outfile))
-    
-    f_in = open(sbml_file, 'r')
-    f_out = open(outfile, 'w')
+def read_taxonomy_id_or_exit(f_in, f_out):
+    """
+    Find the taxonomy ID from model ID while writing out all lines to f_out.
+    """
     
     for line in f_in:
-        
+    
         f_out.write(line)
         
         if 'model id' in line:
@@ -256,18 +228,22 @@ if __name__ == '__main__':
             
             id_groups = re.search("model id=\"[^\"]+ ([0-9]+)\"",line)
             try:
-                taxonomy_id = id_groups.group(1)
+                return id_groups.group(1)
             except:
                 print("Taxonomy ID could not be determined, please check that it is at the end of the model ID.")
                 f_in.close()
                 f_out.close()
                 sys.exit(1)
-            
-            break
-            
+
+
+def create_peg_locus_dict_from_tools(taxonomy_id, peg_prefix, species_genbank_file, locus_pattern, rastfile = None):
+    """
+    Create a dictionary for translating PEG IDs for an organism into locus tags.
+    """
     
     ## Import peg to gi dictionary from gene file (limited by species ID)
-     
+    
+    gene_text_file = '/Users/wbryant/git/incognito/static/tables/MODELS_genes.txt' 
     peg_gi_dict, _ = import_peg_gi_dictionary(gene_text_file, taxonomy_id, peg_prefix)
      
      
@@ -302,21 +278,57 @@ if __name__ == '__main__':
     print("{} relations including interpolations ...".format(len(peg_locus_dict)))
     
     
-    ## Use RAST file to create PEG to locus tag dictionary
+    if rastfile:
+        ## Use RAST file to create PEG to locus tag dictionary
+            
+        peg_locus_dict_rast = create_peg_locus_dict_from_rast(rastfile, locus_pattern)
+        print("{} relations from RAST ...".format(len(peg_locus_dict_rast)))
+           
+        
+        ## Combine RAST data with other data
+        
+        peg_locus_dict.update(peg_locus_dict_rast)
+        peg_locus_dict = interpolate_gene_loci(peg_locus_dict)
     
-    rastfile = "/Users/wbryant/work/cogzymes/data/SEED/rast_bsu_224308.1_pegs.tsv"
-    
-    peg_locus_dict_rast = create_peg_locus_dict_from_rast(rastfile, locus_pattern)
-    print("{} relations from RAST ...".format(len(peg_locus_dict_rast)))
-    
-    
-    
-    ## Combine RAST data with other data
-    
-    peg_locus_dict.update(peg_locus_dict_rast)
-    peg_locus_dict = interpolate_gene_loci(peg_locus_dict)
     print("{} relations including interpolations ...".format(len(peg_locus_dict)))
     
+    return peg_locus_dict, peg_gi_dict
+            
+         
+if __name__ == '__main__':
+       
+    ## M. smegmatis model
+    peg_prefix = 'Seed'    
+#     sbml_file = '/Users/wbryant/work/cogzymes/models/Seed246196.1.25442.xml'
+    sbml_file = '/Users/wbryant/work/cogzymes/models/Seed246196.19.25442.xml'
+    species_genbank_file = '/Users/wbryant/work/cogzymes/data/genbank/MSM_246196.gb'
+    locus_pattern = 'MSMEG\_[0-9]+'
+       
+#     ## BTH model
+#     peg_prefix = 'Seed'    
+#     sbml_file = '/Users/wbryant/work/cogzymes/models/Seed246196.19.25442.xml'
+#     species_genbank_file = '/Users/wbryant/work/cogzymes/data/genbank/MSM_246196.gb'
+
+
+#     ## BSU model
+#     peg_prefix = 'Opt'    
+#     sbml_file = '/Users/wbryant/work/cogzymes/models/Seed224308.1.xml'
+#     species_genbank_file = '/Users/wbryant/work/cogzymes/data/genbank/BSU_224308.gb'
+#     locus_pattern = "BSU[0-9]+"
+#     rastfile = "/Users/wbryant/work/cogzymes/data/SEED/rast_bsu_224308.1_pegs.tsv"
+    
+    
+    
+    outfile = re.sub('\.([^\.]+)$','.locus.\g<1>',sbml_file)
+     
+    print("Output file: '{}'\n".format(outfile))
+     
+    f_in = open(sbml_file, 'r')
+    f_out = open(outfile, 'w')
+     
+    taxonomy_id = read_taxonomy_id_or_exit(f_in, f_out)      
+    
+    peg_locus_dict, peg_gi_dict = create_peg_locus_dict_from_tools(taxonomy_id, peg_prefix, species_genbank_file, locus_pattern)
     
     ## For each peg in gene associations replace with relevant locus_tag
     

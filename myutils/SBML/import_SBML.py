@@ -78,8 +78,8 @@ def import_SBML_to_bipartite(SBML_filename, parse_gprs = False, rxn_notes_fields
         ## If told to parse GPRs, create a list of enzyme 'names' (comma separated list of genes)
         if parse_gprs:
             gpr = rxn_node['gpr']
+            rxn_node['enzymelist'] = []
             if gpr != 'None':
-                rxn_node['enzymelist'] = []
                 for enzyme_name in gene_parser(gpr):
                     rxn_node['enzymelist'].append(enzyme_name)
         
