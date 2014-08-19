@@ -22,6 +22,7 @@ class Command(BaseCommand):
             print("Only model ID should be passed as argument, exiting ...")
             sys.exit(1)
         else:
+            args = list(args)
             try:
                 model_id = args.pop[0]
                 model_source = Source.objects.get(name=model_id)

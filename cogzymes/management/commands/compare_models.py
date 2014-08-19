@@ -18,7 +18,7 @@ def show_set_overlaps(set_1, set_2, text_summary = None):
     print("{:12}\t{:12}\t{:12}".format("Model 1 Only", "Both Models", "Model 2 Only"))
     print("{:12}\t{:12}\t{:12}\n".format(len(set_1_only), len(set_both), len(set_2_only)))
     
-def compare_reactions_and_preds(source_dev, source_ref, source_pred = None):
+def compare_reactions_and_preds(source_dev, source_ref, source_pred = None, verbose = False):
     """
     Get comparisons of the reaction complements of the two models.
     """
@@ -62,6 +62,32 @@ def compare_reactions_and_preds(source_dev, source_ref, source_pred = None):
         num_possible_in_ref,
         num_found_by_pred/float(num_possible_in_ref)))
     
+    
+    if verbose:
+        rxns_possible_in_ref = Model_reaction.objects\
+            .filter(source=source_ref)\
+            .filter(mapping__model_reaction__source=source_pred)\
+            .exclude(mapping__model_reaction__source=source_dev)\
+            .distinct()
+    
+        print("{:55} - {}".format('Name', 'Model ID'))
+         
+        for ref_rxn in rxns_possible_in_ref:
+            if Reaction_group.objects\
+                .filter(model_reaction=ref_rxn)\
+                .filter(model_reaction__source=source_pred)\
+                .exclude(model_reaction__source=source_dev)\
+                .filter(mapping__reaction__reaction_pred__dev_model=source_dev,\
+                    mapping__reaction__reaction_pred__ref_model=source_pred,\
+                    mapping__reaction__reaction_pred__status='add')\
+                .distinct().count() > 0:
+                
+                found_by_pred = '*'
+            else:
+                found_by_pred = ''
+            
+            print("{:55} - {}{}".format(ref_rxn.name, ref_rxn.model_id, found_by_pred))
+            
 
 class Command(BaseCommand):
     
@@ -73,45 +99,38 @@ class Command(BaseCommand):
             
         """ 
         
-        if len(args) == 2:
+        if len(args) > 4:
+            print("Too many arguments!")
+            sys.exit(1)
+        else:
             try:
                 model_1_name = args[0]
-                source_1 = Source.objects.get(name=model_1_name)
-            except:
-                print("Model ID '{}' could not be found, exiting ...".format(model_1_name))
-                sys.exit(1)
-            try:
                 model_2_name = args[1]
-                source_2 = Source.objects.get(name=model_2_name)
-            except:
-                print("Model ID '{}' could not be found, exiting ...".format(model_2_name))
-                sys.exit(1)
-            source_pred = None
-        elif len(args) == 3:
-            try:
-                model_1_name = args[0]
                 source_1 = Source.objects.get(name=model_1_name)
+                source_2 = Source.objects.get(name=model_2_name)                
             except:
-                print("Model ID '{}' could not be found, exiting ...".format(model_1_name))
+                print("Models could not be identified, check IDs")
                 sys.exit(1)
-            try:
-                model_2_name = args[1]
-                source_2 = Source.objects.get(name=model_2_name)
-            except:
-                print("Model ID '{}' could not be found, exiting ...".format(model_2_name))
-                sys.exit(1)
+            
             try:
                 model_pred_name = args[2]
+            except:
+                model_pred_name = 'iJO1366'
+                print("Using default prediction model ({}) ...".format(model_pred_name))
+        
+            try:
                 source_pred = Source.objects.get(name=model_pred_name)
             except:
                 print("Model ID '{}' could not be found, exiting ...".format(model_pred_name))
                 sys.exit(1)
 
-        else:
-            print("Model IDs not given, exiting ...")
-            sys.exit(1)
+            try:
+                args[3]
+                verbose = True
+            except:
+                verbose = False
         
-
+        
         ## How many cogzymes overlap?
         
         cogzymes_1 = set([cogzyme for cogzyme in Cogzyme.objects.filter(enzymes__source=source_1).distinct()])
@@ -125,7 +144,7 @@ class Command(BaseCommand):
         print source_2
         print source_pred
         
-        compare_reactions_and_preds(source_1, source_2, source_pred)
+        compare_reactions_and_preds(source_1, source_2, source_pred, verbose)
         
 
                 
