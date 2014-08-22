@@ -57,12 +57,16 @@ def invert_list_dict(list_dict, remove_duplicates = True):
         return inv_dict
     
 
-def dict_append(app_dict,key,value):
+def dict_append(app_dict,key,value, ignore_duplicates = False):
     """
     If a key is present in the dictionary append value to its value, else create a new entry with value as first member of list.
     """
     if key in app_dict:
-        app_dict[key].append(value)
+        if ignore_duplicates:
+            if value not in app_dict[key]:
+                app_dict[key].append(value) 
+        else:
+            app_dict[key].append(value)
     else:
         app_dict[key] = [value]
 
@@ -131,3 +135,20 @@ class loop_counter:
 #         command = key + " = shelf['" + key + "']"
 #         print command
 #         exec(command)
+
+def count_lines(filename):
+    num_lines = 0
+     
+    f_in = open(filename, 'r')
+    for line in f_in:
+        num_lines += 1
+    
+    f_in.close()
+    return num_lines
+    
+    
+    
+     
+    
+    
+    
