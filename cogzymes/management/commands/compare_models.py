@@ -70,7 +70,7 @@ def compare_reactions_and_preds(source_dev, source_ref, source_pred = None, verb
             .exclude(mapping__model_reaction__source=source_dev)\
             .distinct()
     
-        print("{:55} - {}".format('Name', 'Model ID'))
+        print("{:55} - {:10}{:11}".format('Name', 'Model ID', 'Mapped Mets'))
          
         for ref_rxn in rxns_possible_in_ref:
             if Reaction_group.objects\
@@ -86,7 +86,20 @@ def compare_reactions_and_preds(source_dev, source_ref, source_pred = None, verb
             else:
                 found_by_pred = ''
             
-            print("{:55} - {}{}".format(ref_rxn.name, ref_rxn.model_id, found_by_pred))
+            ## Get number of crossover metabolites
+            
+            num_mets = ref_rxn.metabolites.all().count()
+            num_crossover_mets = ref_rxn.metabolites\
+                .filter(db_metabolite__model_metabolite__source=source_dev)\
+                .distinct().count()
+            
+            print("{:55} - {:9}{} {}/{}"\
+                .format(
+                    ref_rxn.name, 
+                    ref_rxn.model_id, 
+                    found_by_pred,
+                    num_crossover_mets,
+                    num_mets))
             
 
 class Command(BaseCommand):

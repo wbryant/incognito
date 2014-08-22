@@ -557,9 +557,9 @@ class Model_reaction(models.Model):
     db_reaction = models.ForeignKey(Reaction, blank=True, null=True)
     source = models.ForeignKey(Source)
     gpr = models.CharField(max_length = 10000)
-    substrates = models.ManyToManyField(Model_metabolite)
-    products = models.ManyToManyField(Model_metabolite, related_name = 'products_related')
-    metabolites = models.ManyToManyField(Model_metabolite, related_name = 'metabolites_related')
+    substrates = models.ManyToManyField(Model_metabolite, related_name = 'substrates_of_reaction')
+    products = models.ManyToManyField(Model_metabolite, related_name = 'products_of_reaction')
+    metabolites = models.ManyToManyField(Model_metabolite, related_name = 'metabolites_of_reaction')
     curated_db_link = models.BooleanField(default=True)
     mapping = models.ManyToManyField('Reaction_group', blank=True, null=True, default=None, 
                                      through='Mapping')
