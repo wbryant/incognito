@@ -1,0 +1,41 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+    <head>
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <link rel="shortcut icon" type="image/ico" href="" />
+        
+        <title>InCOGnito: Available Models</title>
+        
+    </head>
+    
+    <body>
+        <h1>Available models:</h1>
+        
+        {% if model_data %}
+        
+        <table>
+            <tr>
+                <th>Model ID</th>
+                <th>Organism taxonomy ID</th>
+                <th>Number of Reactions</th>
+                <th>Number of Metabolites</th>
+                <th>Number of Reaction Predictions</th>
+            </tr>
+            {% for model in model_data %}
+            <tr>
+                <td>{{ model.model_id }}</td>
+                <td>{{ model.tax_id }}</td>
+                <td>{{ model.Number_of_Reactions }}</td>
+                <td>{{ model.Number_of_Metabolites }}</td>
+                <td>{{ model.Number_of_Predictions }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+
+    {% else %}
+
+    <p>There are no models in the database.</p>
+
+    {% endif %}
+    </body>        
+</html>       
