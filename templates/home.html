@@ -32,21 +32,34 @@
             <h1 id="title">InCOGnito</h1>
         
             <nav id="top_menu">
-                <a class="home" href="/home">Home</a>
+                <a class="home selected" href="/home">Home</a>
                 <a class="model" href="/model">Model</a>
             </nav>
         </header>
         
-        
         <section id="data">
-            <table id="table_id" class="display">
+            <table id="table1" class="display">
                 <thead>
                     <tr>
+                        <th>Model ID</th>
+                        <th>Organism taxonomy ID</th>
+                        <th>Number of Reactions</th>
+                        <th>Number of Metabolites</th>
+                        <th>Number of Reaction Predictions</th>
                     </tr>
                 </thead>
                 <tbody>
+                {% if model_data %}
+                    {% for model in model_data %}
                     <tr>
+                        <td><a href="/model/id:{{ model.model_id }}">{{ model.model_id }}</a></td>
+                        <td>{{ model.tax_id }}</td>
+                        <td>{{ model.Number_of_Reactions }}</td>
+                        <td>{{ model.Number_of_Metabolites }}</td>
+                        <td>{{ model.Number_of_Predictions }}</td>
                     </tr>
+                    {% endfor %}
+                {% endif %}
                 </tbody>
             </table>   
         </section>
