@@ -105,3 +105,7 @@ STATIC_URL = '/static/'
 
 MEDIA_ROOT = '/Users/wbryant/git/incognito/media/'
 MEDIA_URL = '/media/'
+
+SESSION_ENGINE = "django.contrib.sessions.backends.file"
+
+SESSION_FILE_PATH = "/Users/wbryant/git/incognito/sessions"

@@ -33,27 +33,34 @@
         
             <nav id="top_menu">
                 <a class="home" href="/home">Home</a>
-                <a class="model selected" href="/model">Model</a>
+                <a class="model selected" href="/model">Model{% if model_specified != None %}: {{ model_specified }} {% endif %}</a>
             </nav>
         </header>
         
-        <section id="model_summary"> Model {{ source.name }} has been found. </section>
+        <section id="model_summary"> Model {{ model_specified }} has been found. </section>
         
         
         <section id="data">
             <table id="model_reactions" class="display">
                 <thead><tr>
-                    <td>Model Reaction ID</td>
-                    <td></td>        
-                    <td></td>        
-                    <td></td>        
-                    <td></td>        
-                    <td></td>                
+                    <td>ID (from model)</td>
+                    <td>Name</td>        
+                    <td>MNX Reaction</td>        
+                    <td>Equivalents</td>        
+                    <td>GPR</td>        
                 </tr></thead>
                 
-                <tbody><tr>
-                
-                </tr></tbody>
+                <tbody>
+                {% for rxn in model_rxns_data %}
+                    <tr>
+                        <td>{{ rxn.model_id }}</td>
+                        <td>{{ rxn.name }}</td>        
+                        <td>{{ rxn.db_reaction__name }}</td>        
+                        <td>{{ rxn.equiv_count }}</td>        
+                        <td>{{ rxn.gpr }}</td>        
+                    </tr>
+                {% endfor %}
+                </tbody>
             </table>   
         </section>
 

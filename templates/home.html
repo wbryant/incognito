@@ -33,7 +33,7 @@
         
             <nav id="top_menu">
                 <a class="home selected" href="/home">Home</a>
-                <a class="model" href="/model">Model</a>
+                <a class="model" href="/model">Model{% if model_specified != None %}: {{ model_specified }} {% endif %}</a>
             </nav>
         </header>
         

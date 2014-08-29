@@ -5,6 +5,7 @@
 $(document).ready( function() {
 
     $('#table1').DataTable();
+    $('#model_reactions').DataTable();
     
     $('table a').hover( 
         function() {
