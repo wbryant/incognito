@@ -5,15 +5,10 @@ from annotation.models import Model_reaction, Source, Model_metabolite, Reaction
 from cogzymes.models import Reaction_pred
 from django.db.models import Count
 
-model_specified = None
-
 def home(request):
     
-    if not model_specified:
-        print 'None'
-    else:
-        print model_specified
-    
+    model_specified = request.session.get('model_specified') 
+ 
     model_data = []
     for model in Source.objects.filter(organism__isnull = False):
         model_dict = {}
@@ -38,14 +33,22 @@ def home(request):
     })
     
 
-def model(request, model_id = None):
+def model(request, model_specified = None):
     
-    if model_id:
-        try:
-            source = Source.objects.get(name=model_id)
-            model_specified = model_id
-        except:
-            return render_to_response('model_not_found.html', {'model_id': model_id})
+    #model_specified = request.session.get('model_specified')
+    
+    if not model_specified:
+        ## Is model already specified?
+        model_specified = request.session.get('model_specified')
+        if not model_specified:
+            model_unselected(request)
+    
+    try:
+        source = Source.objects.get(name=model_specified)
+        request.session['model_specified'] = model_specified
+    except:
+        return render_to_response('model_not_found.html', {'model_specified': model_specified})
+        
     
 #     model_reactions = Model_reaction.objects.filter(source=source)
 #     reaction_preds = Reaction_pred.objects.filter(dev_model=source)
