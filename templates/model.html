@@ -12,7 +12,7 @@
 
         <title>InCOGnito</title>
         <meta name="description" content="">
-        <meta name="author" content="wbryant">
+        <meta name="author" content="Will Bryant">
 
         <meta name="viewport" content="width=device-width; initial-scale=1.0">
 
@@ -31,37 +31,93 @@
         <header>
             <h1 id="title">InCOGnito</h1>
         
-            <nav id="top_menu">
+            <nav id="top_menu" class="horizontal_menu">
                 <a class="home" href="/home">Home</a>
-                <a class="model selected" href="/model">Model{% if model_specified != None %}: {{ model_specified }} {% endif %}</a>
+                <a class="model focus selected" href="/model">Model{% if model_specified != None %}: {{ model_specified }} {% endif %}</a>
             </nav>
         </header>
         
         <section id="model_summary"> Model {{ model_specified }} has been found. </section>
         
-        
-        <section id="data">
-            <table id="model_reactions" class="display">
-                <thead><tr>
-                    <td>ID (from model)</td>
-                    <td>Name</td>        
-                    <td>MNX Reaction</td>        
-                    <td>Equivalents</td>        
-                    <td>GPR</td>        
-                </tr></thead>
-                
-                <tbody>
-                {% for rxn in model_rxns_data %}
-                    <tr>
-                        <td>{{ rxn.model_id }}</td>
-                        <td>{{ rxn.name }}</td>        
-                        <td>{{ rxn.db_reaction__name }}</td>        
-                        <td>{{ rxn.equiv_count }}</td>        
-                        <td>{{ rxn.gpr }}</td>        
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>   
+        <section id="tabs">
+            <nav id="tab_menu" class="horizontal_menu">
+                <a href="#tab-1">Model Reactions</a>
+                <a href="#tab-2">Predicted Reactions</a>
+                <a href="#tab-3">Summary</a>
+            </nav>
+            
+            <p class="loader">loading ...</p>
+            
+            <div class="tab" id="tab-1">
+                <table id="model_reactions" class="display">
+                    <thead><tr>
+                        <td>ID (from model)</td>
+                        <td>Name</td>        
+                        <td>MNX Reaction</td>        
+                        <td>Equivalents</td>        
+                        <td>GPR</td>        
+                    </tr></thead>
+                    <tbody>
+                    {% for rxn in model_rxns_data %}
+                        <tr>
+                            <td>{{ rxn.model_id }}</td>
+                            <td>{{ rxn.name }}</td>        
+                            <td>{{ rxn.db_reaction__name }}</td>        
+                            <td>{{ rxn.equiv_count }}</td>        
+                            <td>{{ rxn.gpr }}</td>        
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>   
+            </div>
+            
+            <div class="tab" id="tab-2">
+                <table id="predictions" class="display">
+                    <thead><tr>
+                        <td>ID (X-ref)</td>
+                        <td>Name</td>        
+                        <td>Source</td>        
+                        <td>Cogzyme</td>        
+                        <td>Enzyme Constituents</td>        
+                    </tr></thead>
+                    <tbody>
+                    {% for pred in prediction_data %}
+                        <tr>
+                            <td>{{ pred.reaction_group__name }}</td>
+                            <td>{{ pred.name }}</td>        
+                            <td>{{ pred.ref_model__name }}</td>        
+                            <td>{{ pred.cogzyme__name }}</td>        
+                            <td>{{ pred.cogzyme_constituents }}</td>        
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>   
+            </div>
+
+            <div class="tab" id="tab-3">
+                <table id="summary" class="display">
+                    <thead><tr>
+                        <td>ID (from model)</td>
+                        <td>Name</td>        
+                        <td>MNX Reaction</td>        
+                        <td>Equivalents</td>        
+                        <td>GPR</td>        
+                    </tr></thead>
+                    <tbody>
+                    {% for rxn in model_rxns_data %}
+                        <tr>
+                            <td>{{ rxn.model_id }}</td>
+                            <td>{{ rxn.name }}</td>        
+                            <td>{{ rxn.db_reaction__name }}</td>        
+                            <td>{{ rxn.equiv_count }}</td>        
+                            <td>{{ rxn.gpr }}</td>        
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>   
+            </div>
+ 
+            
         </section>
 
         <footer>

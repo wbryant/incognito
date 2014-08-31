@@ -56,19 +56,23 @@ def model(request, model_specified = None):
 #     for rxn in model_reactions:
 #         rxn_equivalents[rxn.model_id] = Model_reaction.objects.filter(mapping__model_reaction=rxn).distinct().count()
  
+    ## Get data for Model Reactions Tab
     model_rxns_data = Model_reaction.objects\
         .filter(source=source)\
         .annotate(equiv_count=Count('mapping__model_reaction'))\
         .values('model_id','name','gpr','db_reaction__name','equiv_count')
-    
     for rxn_data in model_rxns_data:
         rxn_data['equiv_count'] -= 1
         if rxn_data['equiv_count'] < 0:
             rxn_data['equiv_count'] = 0
     
+    ## Get data for Reaction Prediction tab
+    prediction_data = Reaction_pred.objects.filter(dev_model=source)
+    
     return render_to_response('model.html', {                                  
         'model_rxns_data': model_rxns_data,
-        'model_specified': model_specified
+        'model_specified': model_specified,
+        'prediction_data': prediction_data
     })
     
 #     return render_to_response('model.html', {
