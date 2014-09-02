@@ -2,8 +2,9 @@
 
 from django.shortcuts import render_to_response
 from annotation.models import Model_reaction, Source, Model_metabolite, Reaction_group
-from cogzymes.models import Reaction_pred
+from cogzymes.models import Reaction_pred, Cogzyme, Gene
 from django.db.models import Count
+from myutils.general.utils import dict_append
 
 def home(request):
     
@@ -67,8 +68,34 @@ def model(request, model_specified = None):
             rxn_data['equiv_count'] = 0
     
     ## Get data for Reaction Prediction tab
-    prediction_data = Reaction_pred.objects.filter(dev_model=source)
-    
+    prediction_data = Reaction_pred.objects\
+        .filter(dev_model=source)\
+        .values(
+            'reaction__mapping__name',
+            'reaction__name',
+            'ref_model__name',
+            'cogzyme__name'
+        )
+    for pred in prediction_data:
+        cogzyme = Cogzyme.objects.get(name=pred['cogzyme__name'])
+        locus_cog_data = Gene.objects\
+            .filter(
+                organism__source=source,
+                cogs__cogzyme=cogzyme)\
+            .values('locus_tag','cogs__name')
+        cog_locus_dict = {}
+        for locus_cog in locus_cog_data:
+            dict_append(cog_locus_dict,locus_cog['cogs__name'],locus_cog['locus_tag'])
+        
+        cog_locus_list = []
+        for cog in cog_locus_dict:
+            locus_list = sorted(cog_locus_dict[cog])
+            locus_string = ", ".join(locus_list)
+            cog_locus_list.append([cog, locus_string])
+        
+        cog_locus_list.sort(key=lambda x: x[0])
+        pred['cog_locus_list'] = cog_locus_list       
+        
     return render_to_response('model.html', {                                  
         'model_rxns_data': model_rxns_data,
         'model_specified': model_specified,

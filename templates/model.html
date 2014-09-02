@@ -26,7 +26,7 @@
         <script src="{% static "js/incognito.js" %}"></script>
     </head>
 
-    <body id="incognito">
+    <body id="model_body">
 
         <header>
             <h1 id="title">InCOGnito</h1>
@@ -49,7 +49,7 @@
             <p class="loader">loading ...</p>
             
             <div class="tab" id="tab-1">
-                <table id="model_reactions" class="display">
+                <table id="model_reactions" class="display datatable">
                     <thead><tr>
                         <td>ID (from model)</td>
                         <td>Name</td>        
@@ -72,7 +72,7 @@
             </div>
             
             <div class="tab" id="tab-2">
-                <table id="predictions" class="display">
+                <table id="predictions" class="display datatable">
                     <thead><tr>
                         <td>ID (X-ref)</td>
                         <td>Name</td>        
@@ -83,11 +83,15 @@
                     <tbody>
                     {% for pred in prediction_data %}
                         <tr>
-                            <td>{{ pred.reaction_group__name }}</td>
-                            <td>{{ pred.name }}</td>        
+                            <td>{{ pred.reaction__mapping__name }}</td>
+                            <td>{{ pred.reaction__name }}</td>        
                             <td>{{ pred.ref_model__name }}</td>        
-                            <td>{{ pred.cogzyme__name }}</td>        
-                            <td>{{ pred.cogzyme_constituents }}</td>        
+                            <td>{{ pred.cogzyme__name }}</td>
+                            <td>
+                                {% for cog_locus in pred.cog_locus_list %}
+                                    {{ cog_locus.0 }}: {{ cog_locus.1 }} <br/>
+                                {% endfor %}
+                            </td>       
                         </tr>
                     {% endfor %}
                     </tbody>
@@ -95,6 +99,10 @@
             </div>
 
             <div class="tab" id="tab-3">
+                <p> This model has some reactions and some metabolites!</p>
+                
+                <p>Number of predictions: {{  }}</p>
+                
                 <table id="summary" class="display">
                     <thead><tr>
                         <td>ID (from model)</td>

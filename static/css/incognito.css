@@ -1,10 +1,20 @@
 body {
     font: 80%/1.45em "Lucida Grande", Verdana, Arial, Helvetica, sans-serif;
-    background: #eee;
     margin: 0px;
     padding: 0px;
     color: #333;
-    background-color: #eee;
+}
+
+#home_body {
+    background: #F4CD8D;
+}
+
+#model_body {
+    background: #99C7E0;
+}
+
+#tabs nav {
+    background: #99C7E0;
 }
 
 header {
@@ -46,6 +56,10 @@ nav a {
 
 #top_menu a {
     border-bottom: 10px solid #eee;    
+}
+
+header ~ * {
+    margin: 1em 1.5em;
 }
 
 #tab_menu {
@@ -95,6 +109,8 @@ nav a {
     border-color: #009973;
 }
 
+
+
 #tab_menu a:nth-child(2).focus {
     border-color: #cc70a7;
 }
@@ -107,6 +123,22 @@ nav a {
     border-color: #56b0e9;
 }
 
+#tab-1 * {
+    background: #009973;
+}
+
+#tab-2 * {
+    background: #cc70a7;
+}
+
+#tab-3 * {
+    background: #f0e342;
+}
+
+#tab-4 * {
+    background: #56b0e9;
+}
+
 table a {
     text-decoration: none;
 }
@@ -116,7 +148,7 @@ table {
 }
 
 section {
-    margin: 1em 0.5em;
+    margin: 1em 1em;
 }
 
 

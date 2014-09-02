@@ -8,7 +8,7 @@ $(document).ready( function() {
     // $('#model_reactions').DataTable();
 
     // All tables are DataTables and appear only when loaded
-    $('table').DataTable( {
+    $('table.datatable').DataTable( {
         "fnDrawCallback": function( oSettings ) {
             $('p.loader').hide();
             $(this).show();
@@ -48,7 +48,7 @@ $(document).ready( function() {
     var tabContainers = $('#tabs > div.tab'); /* Store the tabContainer; look for direct descendants that match div class */
     tabContainers.hide().filter(':first').show(); /* Hide all to start off with then show the first one */
     
-    $('#tabs nav a:first').addClass( 'focus' );
+    $('#tabs nav a:first').addClass( 'selected focus' );
     
     $('#tabs nav a').click(
         function () {
