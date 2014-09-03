@@ -72,7 +72,7 @@
             </div>
             
             <div class="tab" id="tab-2">
-                <table id="predictions" class="display datatable">
+            <!--    <table id="predictions" class="display datatable">
                     <thead><tr>
                         <td>ID (X-ref)</td>
                         <td>Name</td>        
@@ -95,34 +95,38 @@
                         </tr>
                     {% endfor %}
                     </tbody>
-                </table>   
+                </table> -->   
             </div>
 
             <div class="tab" id="tab-3">
-                <p> This model has some reactions and some metabolites!</p>
                 
-                <p>Number of predictions: {{  }}</p>
+                <p>Number of predictions: {{ summary.num_preds }}</p>
+                
+                <p>Number distinct adds: {{ summary.num_adds }}</p>
+                
+                <p>Number distinct rems: {{ summary.num_rems }}</p>
+                
+                
                 
                 <table id="summary" class="display">
                     <thead><tr>
-                        <td>ID (from model)</td>
-                        <td>Name</td>        
-                        <td>MNX Reaction</td>        
-                        <td>Equivalents</td>        
-                        <td>GPR</td>        
+                        <td>Reference Model</td>
+                        <td>Number of additions</td>        
+                        <td>Number of removals</td>                
                     </tr></thead>
                     <tbody>
-                    {% for rxn in model_rxns_data %}
+                    {% for model in summary.ref_model_list %}
                         <tr>
-                            <td>{{ rxn.model_id }}</td>
-                            <td>{{ rxn.name }}</td>        
-                            <td>{{ rxn.db_reaction__name }}</td>        
-                            <td>{{ rxn.equiv_count }}</td>        
-                            <td>{{ rxn.gpr }}</td>        
+                            <td>{{ model.0 }}</td>
+                            <td>{{ model.1 }}</td>        
+                            <td>{{ model.2 }}</td>        
                         </tr>
                     {% endfor %}
                     </tbody>
                 </table>   
+                
+                
+                
             </div>
  
             

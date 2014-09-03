@@ -1,10 +1,10 @@
 # Create your views here.
 
 from django.shortcuts import render_to_response
-from annotation.models import Model_reaction, Source, Model_metabolite, Reaction_group
+from annotation.models import Model_reaction, Source, Model_metabolite, Reaction_group, Reaction
 from cogzymes.models import Reaction_pred, Cogzyme, Gene
 from django.db.models import Count
-from myutils.general.utils import dict_append
+from myutils.general.utils import dict_append, preview_dict
 
 def home(request):
     
@@ -76,31 +76,85 @@ def model(request, model_specified = None):
             'ref_model__name',
             'cogzyme__name'
         )
-    for pred in prediction_data:
-        cogzyme = Cogzyme.objects.get(name=pred['cogzyme__name'])
-        locus_cog_data = Gene.objects\
-            .filter(
-                organism__source=source,
-                cogs__cogzyme=cogzyme)\
-            .values('locus_tag','cogs__name')
-        cog_locus_dict = {}
-        for locus_cog in locus_cog_data:
-            dict_append(cog_locus_dict,locus_cog['cogs__name'],locus_cog['locus_tag'])
-        
-        cog_locus_list = []
-        for cog in cog_locus_dict:
-            locus_list = sorted(cog_locus_dict[cog])
-            locus_string = ", ".join(locus_list)
-            cog_locus_list.append([cog, locus_string])
-        
-        cog_locus_list.sort(key=lambda x: x[0])
-        pred['cog_locus_list'] = cog_locus_list       
-        
+#     for pred in prediction_data:
+#         cogzyme = Cogzyme.objects.get(name=pred['cogzyme__name'])
+#         locus_cog_data = Gene.objects\
+#             .filter(
+#                 organism__source=source,
+#                 cogs__cogzyme=cogzyme)\
+#             .values('locus_tag','cogs__name')
+#         cog_locus_dict = {}
+#         for locus_cog in locus_cog_data:
+#             dict_append(cog_locus_dict,locus_cog['cogs__name'],locus_cog['locus_tag'])
+#         
+#         cog_locus_list = []
+#         for cog in cog_locus_dict:
+#             locus_list = sorted(cog_locus_dict[cog])
+#             locus_string = ", ".join(locus_list)
+#             cog_locus_list.append([cog, locus_string])
+#         
+#         cog_locus_list.sort(key=lambda x: x[0])
+#         pred['cog_locus_list'] = cog_locus_list       
+    
+    summary = {}
+    
+    num_preds = Source.objects\
+        .filter(ref_model_preds__dev_model=source)\
+        .count()
+    summary['num_preds'] = num_preds
+    
+    num_adds = Reaction.objects\
+        .filter(
+            model_reaction__reaction_pred__dev_model=source,
+            model_reaction__reaction_pred__status='add')\
+        .distinct().count()
+    summary['num_adds'] = num_adds
+    
+    num_rems = Reaction.objects\
+        .filter(
+            model_reaction__reaction_pred__dev_model=source,
+            model_reaction__reaction_pred__status='rem')\
+        .distinct().count()
+    summary['num_rems'] = num_rems
+    
+    
+    adds_list = Source.objects\
+        .filter(
+            ref_model_preds__dev_model=source,
+            ref_model_preds__status='add')\
+        .annotate(Count('ref_model_preds'))\
+        .values_list('name','ref_model_preds__count')
+    rems_list = Source.objects\
+        .filter(
+            ref_model_preds__dev_model=source,
+            ref_model_preds__status='rem')\
+        .annotate(Count('ref_model_preds'))\
+        .values_list('name','ref_model_preds__count')
+    ref_models = {}
+    for adds in adds_list:
+        if adds[0] not in ref_models:
+            ref_models[adds[0]] = {}
+        ref_models[adds[0]]['adds'] = adds[1]
+    for rems in rems_list:
+        if rems[0] not in ref_models:
+            ref_models[rems[0]] = {}
+        ref_models[rems[0]]['rems'] = rems[1]
+    ref_model_list = []
+    for model in ref_models:
+        if 'rems' not in ref_models[model]:
+            ref_models[model]['rems'] = 0
+        if 'adds' not in ref_models[model]:
+            ref_models[model]['adds'] = 0
+        ref_model_list.append([model, ref_models[model]['adds'], ref_models[model]['rems']])
+    summary['ref_model_list'] = ref_model_list
+       
     return render_to_response('model.html', {                                  
         'model_rxns_data': model_rxns_data,
         'model_specified': model_specified,
-        'prediction_data': prediction_data
+        'prediction_data': prediction_data,
+        'summary':  summary
     })
+
     
 #     return render_to_response('model.html', {
 #         'source': source, 

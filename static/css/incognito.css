@@ -123,7 +123,7 @@ header ~ * {
     border-color: #56b0e9;
 }
 
-#tab-1 * {
+/*#tab-1 * {
     background: #009973;
 }
 
@@ -137,13 +137,13 @@ header ~ * {
 
 #tab-4 * {
     background: #56b0e9;
-}
+}*/
 
 table a {
     text-decoration: none;
 }
 
-table {
+table.datatable {
     display: none;
 }
 
