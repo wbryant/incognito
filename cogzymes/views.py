@@ -76,25 +76,25 @@ def model(request, model_specified = None):
             'ref_model__name',
             'cogzyme__name'
         )
-#     for pred in prediction_data:
-#         cogzyme = Cogzyme.objects.get(name=pred['cogzyme__name'])
-#         locus_cog_data = Gene.objects\
-#             .filter(
-#                 organism__source=source,
-#                 cogs__cogzyme=cogzyme)\
-#             .values('locus_tag','cogs__name')
-#         cog_locus_dict = {}
-#         for locus_cog in locus_cog_data:
-#             dict_append(cog_locus_dict,locus_cog['cogs__name'],locus_cog['locus_tag'])
-#         
-#         cog_locus_list = []
-#         for cog in cog_locus_dict:
-#             locus_list = sorted(cog_locus_dict[cog])
-#             locus_string = ", ".join(locus_list)
-#             cog_locus_list.append([cog, locus_string])
-#         
-#         cog_locus_list.sort(key=lambda x: x[0])
-#         pred['cog_locus_list'] = cog_locus_list       
+    for pred in prediction_data:
+        cogzyme = Cogzyme.objects.get(name=pred['cogzyme__name'])
+        locus_cog_data = Gene.objects\
+            .filter(
+                organism__source=source,
+                cogs__cogzyme=cogzyme)\
+            .values('locus_tag','cogs__name')
+        cog_locus_dict = {}
+        for locus_cog in locus_cog_data:
+            dict_append(cog_locus_dict,locus_cog['cogs__name'],locus_cog['locus_tag'])
+         
+        cog_locus_list = []
+        for cog in cog_locus_dict:
+            locus_list = sorted(cog_locus_dict[cog])
+            locus_string = ", ".join(locus_list)
+            cog_locus_list.append([cog, locus_string])
+         
+        cog_locus_list.sort(key=lambda x: x[0])
+        pred['cog_locus_list'] = cog_locus_list       
     
     summary = {}
     
