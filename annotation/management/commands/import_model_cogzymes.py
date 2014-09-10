@@ -437,6 +437,16 @@ class Command(BaseCommand):
             name_enzyme_dict = {}
             genes_not_found = []
         
+        replacement_pairs = [
+            ('_[a-zA-Z]$',''),
+            ('^M_',''),
+            ('^R_',''),
+            ('_DASH_','-'),
+            ('_LPAREN_','('),
+            ('_RPAREN_',')')
+        ]
+        
+        
         for idx in G.nodes():
             counter.step()
             node = G.node[idx]
@@ -450,8 +460,7 @@ class Command(BaseCommand):
                 else:
                     compartment = Compartment.objects.get(id='MNXC3')
                     
-                model_id = re.sub('_[a-zA-Z]$','',node['id'])
-                model_id = re.sub('^M_','',model_id)
+                model_id = node['id']
                 
                 met = Model_metabolite(
                         model_id = model_id,
@@ -460,6 +469,12 @@ class Command(BaseCommand):
                         source = source,
                         curated_db_link = False
                 )
+                
+                
+                ## Extract core model ID to look for mappings
+               
+                for rep_pair in replacement_pairs:
+                    model_id = re.sub(rep_pair[0],rep_pair[1],model_id)
                 
                 
                 ## Can the metabolite be unambiguously mapped to the DB?
@@ -481,16 +496,20 @@ class Command(BaseCommand):
             else:
                 ## Node is a reaction, so import as such
                 
-                rxn_id = re.sub('^R_','',node['id'])
+                model_id = node['id']
                 
                 rxn = Model_reaction(
-                        model_id = rxn_id,
+                        model_id = model_id,
                         name = node['name'],
                         gpr = node['gpr'],
                         source = source,
                         curated_db_link = False
                 )
 
+                ## Extract core model ID to look for mappings
+               
+                for rep_pair in replacement_pairs:
+                    model_id = re.sub(rep_pair[0],rep_pair[1],model_id)
                 
                 ## Can the reaction be unambiguously mapped to the DB?
                 
