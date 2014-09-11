@@ -8,6 +8,7 @@ class Source(models.Model):
     
     ## For metabolic models, state which organism the model is for
     organism = models.ForeignKey('cogzymes.Organism', blank=True, null=True, default=None)
+    reference_model = models.NullBooleanField(default=False, blank=True, null=True)
     
     def __unicode__(self):
         if not self.organism:
