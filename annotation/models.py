@@ -555,7 +555,6 @@ class Model_reaction(models.Model):
     
     model_id = models.CharField(max_length = 100)
     name = models.CharField(max_length = 2000)
-    db_reaction = models.ForeignKey(Reaction, blank=True, null=True)
     source = models.ForeignKey(Source)
     gpr = models.CharField(max_length = 10000)
     substrates = models.ManyToManyField(Model_metabolite, related_name = 'substrates_of_reaction')
@@ -564,6 +563,20 @@ class Model_reaction(models.Model):
     curated_db_link = models.BooleanField(default=True)
     mapping = models.ManyToManyField('Reaction_group', blank=True, null=True, default=None, 
                                      through='Mapping')
+
+    db_reaction = models.ForeignKey(Reaction, blank=True, null=True)    
+    method_choices = (
+        ('syn','Synonym'),
+        ('mtp','Metprint'),
+        ('unk','Unknown'),
+    )
+    db_mapping_method = models.CharField(max_length=3, choices=method_choices, default=None, blank=True, null=True)
+    
+    def save(self, *args, **kwargs):
+        if self.db_reaction:
+            if not self.db_mapping_method:
+                self.db_mapping_method = 'unk'
+        super(Model_reaction, self).save(*args, **kwargs)
     
     def __unicode__(self):
         return "{:10} ({})".format(self.model_id, self.name)
@@ -602,7 +615,7 @@ class Model_reaction(models.Model):
 ## Mappings between SBML Models inferred by other means than through MNX
 class Method(models.Model):
     """
-    The method by which a mapping was inferred.
+    The method by which a mapping to a Reaction Group was inferred.
     """
     
     name = models.CharField(max_length=100)
@@ -636,3 +649,5 @@ class Mapping(models.Model):
             self.group.name,
             self.method.name
         )
+
+

@@ -164,6 +164,7 @@ def map_reaction_metprints(source_name):
             model_rxn = model_rxn_dict[metprint]
             db_rxn = db_rxn_dict[metprint]
             model_rxn.db_reaction = db_rxn
+            model_rxn.db_mapping_type = 'mtp'
             model_rxn.save()
             num_mapped += 1
             
@@ -172,7 +173,7 @@ def map_reaction_metprints(source_name):
             except:
                 seed_name = ''
             
-            print("{}\t{}\t""{}""\t""{}""".format(
+            print("{}\t{}\n - '{}'\n - '{}'".format(
                 model_rxn.model_id,
                 model_rxn.name,
                 ", ".join(db_rxn.reaction_synonym_set.filter(source__name='seed').values_list('synonym', flat=True)),
@@ -258,6 +259,7 @@ def maps_to_db_rxn(syn_rxn_dict, model_rxn, core_id = None):
     
     if len(mappings) == 1:
         model_rxn.db_reaction = mappings[0]
+        model_rxn.db_mapping_method = 'syn'
         map_status = True
     else:
 #         print("\nMapping failed for reaction {}:".format(model_rxn.model_id))
@@ -681,6 +683,7 @@ class Command(BaseCommand):
                 db_rxn = Reaction.objects.get(id=db_rxn_id)
                 
                 model_rxn.db_reaction = db_rxn
+                model_rxn.dp_mapping_method = 'syn'
                 
                 model_rxn.save()
                 
