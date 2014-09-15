@@ -16,13 +16,13 @@ from myutils.SBML.gene_parser import gene_parser
 def import_SBML_to_bipartite(SBML_filename, parse_gprs = False, rxn_notes_fields = [], met_notes_fields = []):
     """Import file C{SBML_filename} and convert it into a bipartite metabolic network."""
     
-    print '\n\nImporting SBML model ...'
+    print('\nImporting SBML model ...')
     
     # Import SBML model
     reader = SBMLReader()
     document = reader.readSBMLFromFile(SBML_filename)
     model = document.getModel()
-    print 'Model being imported: %s ...' % (model.getId())
+    print('Model being imported: {}.'.format(model.getId()))
     
     # Initialize NetworkX model and populate with metabolite and reaction nodes.
     # At the same time, create an id / node_idx dictionary for use when creating

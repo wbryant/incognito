@@ -100,7 +100,7 @@ def map_reaction_metprints(source_name):
     
     db_rxn_dict_app = {}
     num_mapped_db_rxns = 0
-    counter = loop_counter(len(db_reactions), "Preparing db_reaction dictionary ...")
+    counter = loop_counter(len(db_reactions), "    Preparing db_reaction dictionary ...")
     for db_rxn in db_reactions:
         counter.step()
         subs, prod, complete = db_rxn.metprint()
@@ -118,8 +118,8 @@ def map_reaction_metprints(source_name):
             db_rxn_dict[metprint] = db_rxn_dict_app[metprint][0] 
     
     num_db_dup_metprints = len(db_rxn_dict_app) - len(db_rxn_dict)
-    print("{} fully mapped reactions in the DB:".format(num_mapped_db_rxns))
-    print(" - {} duplicate metprints in the DB".format(num_db_dup_metprints))
+    print("    {} full metprint reactions in the DB:".format(num_mapped_db_rxns))
+    print("     - {} duplicate metprints in the DB".format(num_db_dup_metprints))
     
     ## Find all model_reactions that fully map to db_metabolites and test against the metprint dictionary
     
@@ -143,7 +143,7 @@ def map_reaction_metprints(source_name):
     ## Remove duplicate metprints
     
     model_rxn_dict = {}
-    print("\nMapped model reactions:\n")
+    print("    \nMetprint reactions:")
     for metprint in model_rxn_dict_app:
         if len(model_rxn_dict_app[metprint]) == 1:
             model_rxn_dict[metprint] = model_rxn_dict_app[metprint][0]
@@ -152,8 +152,8 @@ def map_reaction_metprints(source_name):
 #             print("") 
              
     num_model_dup_metprints = len(model_rxn_dict_app) - len(model_rxn_dict)
-    print("{} fully mapped reactions in the model:".format(num_mapped_model_rxns))
-    print(" - {} duplicate metprints in the model".format(num_model_dup_metprints))
+    print("    {} full metprint reactions in the model:".format(num_mapped_model_rxns))
+    print("     - {} duplicate metprints in the model".format(num_model_dup_metprints))
     
     ## Compare metprints for equivalents and assign db_reactions to model_reactions
     
@@ -166,15 +166,30 @@ def map_reaction_metprints(source_name):
             model_rxn.db_reaction = db_rxn
             model_rxn.save()
             num_mapped += 1
+            
+            try:
+                seed_name = max(db_rxn.reaction_synonym_set.filter(source__name='seed').values_list('synonym', flat=True))
+            except:
+                seed_name = ''
+            
+            print("{}\t{}\t""{}""\t""{}""".format(
+                model_rxn.model_id,
+                model_rxn.name,
+                ", ".join(db_rxn.reaction_synonym_set.filter(source__name='seed').values_list('synonym', flat=True)),
+                seed_name
+            ))
     
-    print("{} model reactions mapped to DB reactions using metprints.".format(num_mapped)) 
+    print("    {} model reactions mapped to DB reactions using metprints.\n".format(num_mapped)) 
     
-def maps_to_db_met(syn_met_dict, model_met):
+def maps_to_db_met(syn_met_dict, model_met, core_id = None):
     """
     If unambiguous DB metabolite can be found for model metabolite, add link in model_metabolite entry.
     """
     
-    model_syns = [model_met.model_id.lower(), model_met.name.lower()]
+    if core_id: 
+        model_syns = [core_id.lower(), model_met.name.lower()]
+    else:
+        model_syns = [model_met.model_id.lower(), model_met.name.lower()]
     
     all_synonyms = deepcopy(model_syns)
     
@@ -215,11 +230,14 @@ def maps_to_db_met(syn_met_dict, model_met):
         
     return model_met, map_status, dup_mappings
 
-def maps_to_db_rxn(syn_rxn_dict, model_rxn):
+def maps_to_db_rxn(syn_rxn_dict, model_rxn, core_id = None):
     """If unambiguous DB metabolite can be found for model metabolite, add link in model_metabolite entry."""
     
-    model_syns = [model_rxn.model_id.lower(), model_rxn.name.lower()]
-    
+    if core_id: 
+        model_syns = [core_id.lower(), model_rxn.name.lower()]
+    else:
+        model_syns = [model_rxn.model_id.lower(), model_rxn.name.lower()]
+        
     all_synonyms = deepcopy(model_syns)
     
     for synonym in model_syns:
@@ -280,12 +298,12 @@ class Command(BaseCommand):
             model_file_in = args[0]
         except:
             model_file_in = '/Users/wbryant/work/cogzymes/models/ECO_iJO1366.xml'
-            print("Using default model ...")
+            print("Using default model.")
         
         if len(args) == 2:
             if args[1] == 'add_cogzymes':
                 add_cogzymes = True
-                print("Import will include adding cogzymes ...")
+                print("Import will include cogzyme analysis.")
         else:
             add_cogzymes = False
 
@@ -293,8 +311,6 @@ class Command(BaseCommand):
         ## Import model data using NetworkX
         
         G = import_sbml(model_file_in, add_cogzymes)
-        
-        
         
         
         ## If COGzymes are being imported, make preparations
@@ -326,7 +342,7 @@ class Command(BaseCommand):
                 print("Species ID was not specified in SBML model ID.  Please use format 'model_id - taxonomy_id' for the model ID.")
                 sys.exit(1)
             else:
-                print("Species taxonomy ID is {} ...".format(G.species_id))        
+                print("Species taxonomy ID is {}.".format(G.species_id))        
 
         
             ## Is organism available in COG?
@@ -409,7 +425,7 @@ class Command(BaseCommand):
 
         ## Remove previous information from this source
         
-        print("Deleting previous entries for this model (curated model mappings will need to be re-added ...")
+        print("Deleting previous entries for this model (curated model mappings will need to be re-added) ...")
         
         Model_metabolite.objects.filter(source=source, curated_db_link=False).delete()
         Model_reaction.objects.filter(source=source, curated_db_link=False).delete()
@@ -471,7 +487,7 @@ class Command(BaseCommand):
                 )
                 
                 
-                ## Extract core model ID to look for mappings
+                ## Extract core model metabolite ID to look for mappings
                
                 for rep_pair in replacement_pairs:
                     model_id = re.sub(rep_pair[0],rep_pair[1],model_id)
@@ -479,7 +495,7 @@ class Command(BaseCommand):
                 
                 ## Can the metabolite be unambiguously mapped to the DB?
                 
-                met, map_status, dup_mappings = maps_to_db_met(synonym_db_met_dict,met)
+                met, map_status, dup_mappings = maps_to_db_met(synonym_db_met_dict,met, model_id)
                 for dup_mapping in dup_mappings:
                     dict_append(dup_mappings_dict, dup_mapping.id, node['id'])        
                 if map_status == False:
@@ -511,9 +527,10 @@ class Command(BaseCommand):
                 for rep_pair in replacement_pairs:
                     model_id = re.sub(rep_pair[0],rep_pair[1],model_id)
                 
+                
                 ## Can the reaction be unambiguously mapped to the DB?
                 
-                rxn, map_status, dup_mappings = maps_to_db_rxn(synonym_db_rxn_dict,rxn)
+                rxn, map_status, dup_mappings = maps_to_db_rxn(synonym_db_rxn_dict,rxn, model_id)
                 for dup_mapping in dup_mappings:
                     dict_append(dup_rxn_mappings_dict, dup_mapping.id, node['id'])        
                 if map_status == False:
