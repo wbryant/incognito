@@ -168,24 +168,24 @@ def map_reaction_metprints(source_name):
             model_rxn.save()
             num_mapped += 1
             
-            try:
-                seed_name = max(db_rxn.reaction_synonym_set.filter(source__name='seed').values_list('synonym', flat=True))
-            except:
-                seed_name = "+" + ", ".join(db_rxn.reaction_synonym_set.all().values_list('synonym', flat=True))
-            
-            if db_rxn.reaction_synonym_set.all().count() == 0:
-                seed_name = "No synonyms for '{} ({})' - equation: {}"\
-                    .format(
-                        db_rxn.name,
-                        db_rxn.source.name,
-                        db_rxn.equation()
-                    )
-            
-            print("\n{}\t{}\n - {}".format(
-                model_rxn.model_id,
-                model_rxn.name,
-                seed_name
-            ))
+#             try:
+#                 seed_name = max(db_rxn.reaction_synonym_set.filter(source__name='seed').values_list('synonym', flat=True))
+#             except:
+#                 seed_name = "+" + ", ".join(db_rxn.reaction_synonym_set.all().values_list('synonym', flat=True))
+#             
+#             if db_rxn.reaction_synonym_set.all().count() == 0:
+#                 seed_name = "No synonyms for '{} ({})' - equation: {}"\
+#                     .format(
+#                         db_rxn.name,
+#                         db_rxn.source.name,
+#                         db_rxn.equation()
+#                     )
+#             
+#             print("\n{}\t{}\n - {}".format(
+#                 model_rxn.model_id,
+#                 model_rxn.name,
+#                 seed_name
+#             ))
     
     print("    {} model reactions mapped to DB reactions using metprints.\n".format(num_mapped)) 
     
@@ -310,11 +310,19 @@ class Command(BaseCommand):
             print("Using default model.")
         
         if len(args) >= 2:
-            if args[1] == 'add_cogzymes':
+            
+            arg_options = args[1:]
+            
+            if 'add_cogzymes' in arg_options:
                 add_cogzymes = True
                 print("Import will include cogzyme analysis.")
-        else:
-            add_cogzymes = False
+            else:
+                add_cogzymes = False
+            
+            if 'ref' in arg_options:
+                ref_status = True
+            else:
+                ref_status = False
 
 
         ## Import model data using NetworkX
@@ -427,7 +435,8 @@ class Command(BaseCommand):
         except:
             source = Source(
                 name=source_name,
-                organism=organism
+                organism=organism,
+                reference_model = ref_status
             )
             source.save()
         
