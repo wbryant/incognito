@@ -75,8 +75,15 @@ def invert(gene_logic):
     try:
         logic = expr.parseString(gene_logic)
     except:
-        print("\n\nBad logic: '{}'".format(gene_logic))
-        sys.exit(1)
+        try:
+            ## Might be an incorrect encoding - try fixing it
+            gene_logic = gene_logic.decode('utf-8').replace(u'\xa0', u' ')
+            gene_logic = str(gene_logic)
+            logic = expr.parseString(gene_logic)
+        except:
+            
+            print("\n\nBad logic: '{}'".format(gene_logic))
+            sys.exit(1)
     #print logic
     if isinstance(logic[0], str):
         return logic
@@ -98,6 +105,7 @@ def gene_parser(gene_logic):
                 enzyme_list.append(",".join(sorted(genes)))
             
             enzyme_list.append(item)
+    enzyme_list = list(set(enzyme_list))
     return enzyme_list
 
 if __name__ == '__main__':

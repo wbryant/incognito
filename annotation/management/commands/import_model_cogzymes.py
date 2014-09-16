@@ -432,6 +432,9 @@ class Command(BaseCommand):
             if not source.organism:
                 source.organism = organism
                 source.save()
+            if not source.reference_model:
+                source.reference_model = ref_status
+                source.save()
         except:
             source = Source(
                 name=source_name,
