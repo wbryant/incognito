@@ -171,12 +171,19 @@ def map_reaction_metprints(source_name):
             try:
                 seed_name = max(db_rxn.reaction_synonym_set.filter(source__name='seed').values_list('synonym', flat=True))
             except:
-                seed_name = ''
+                seed_name = "+" + ", ".join(db_rxn.reaction_synonym_set.all().values_list('synonym', flat=True))
             
-            print("{}\t{}\n - '{}'\n - '{}'".format(
+            if db_rxn.reaction_synonym_set.all().count() == 0:
+                seed_name = "No synonyms for '{} ({})' - equation: {}"\
+                    .format(
+                        db_rxn.name,
+                        db_rxn.source.name,
+                        db_rxn.equation()
+                    )
+            
+            print("\n{}\t{}\n - {}".format(
                 model_rxn.model_id,
                 model_rxn.name,
-                ", ".join(db_rxn.reaction_synonym_set.filter(source__name='seed').values_list('synonym', flat=True)),
                 seed_name
             ))
     
@@ -232,7 +239,7 @@ def maps_to_db_met(syn_met_dict, model_met, core_id = None):
     return model_met, map_status, dup_mappings
 
 def maps_to_db_rxn(syn_rxn_dict, model_rxn, core_id = None):
-    """If unambiguous DB metabolite can be found for model metabolite, add link in model_metabolite entry."""
+    """If unambiguous DB reaction can be found for model reaction, add link in model_reaction entry."""
     
     if core_id: 
         model_syns = [core_id.lower(), model_rxn.name.lower()]
@@ -302,7 +309,7 @@ class Command(BaseCommand):
             model_file_in = '/Users/wbryant/work/cogzymes/models/ECO_iJO1366.xml'
             print("Using default model.")
         
-        if len(args) == 2:
+        if len(args) >= 2:
             if args[1] == 'add_cogzymes':
                 add_cogzymes = True
                 print("Import will include cogzyme analysis.")
