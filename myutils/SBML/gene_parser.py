@@ -83,7 +83,7 @@ def invert(gene_logic):
         except:
             
             print("\n\nBad logic: '{}'".format(gene_logic))
-            sys.exit(1)
+            return []
     #print logic
     if isinstance(logic[0], str):
         return logic
