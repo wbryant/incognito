@@ -114,7 +114,7 @@ class Enzyme_type(models.Model):
     
 class Reaction_pred(models.Model):
     """What reactions are predicted to be present in a dev (development) organism 
-    from a ref (reference) model?
+    from a ref (reference) model
     N.B. The dev model can be deduced from which reaction (Model_reaction) is predicted.
     """
  
