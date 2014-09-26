@@ -4,10 +4,27 @@ from annotation.models import *
 from cogzymes.models import *
 from myutils.general.utils import dict_append, preview_dict
 import sys, os, re
+from collections import Counter
 
 from itertools import groupby, product
 from operator import itemgetter
+from myutils.general.mnxref_reac_extract import Rxn_ids
 
+def evaluate_prediction_quality(pred_set, ref_set, description = "Quality scores"):
+    
+    if len(pred_set) == 0:
+        return []
+    
+    num_preds_ref = len(pred_set & ref_set)
+    num_preds_not_ref = len(pred_set) - num_preds_ref
+    
+    print("{}:\t{:5}\t{:5}\t{:.3f}".format(
+        description,
+        num_preds_ref,
+        num_preds_not_ref,
+        num_preds_ref/float(len(pred_set))
+    )) 
+    
 def bsu_correction(bsu_num):
     """Many BSU gene names have an excess 0 at the end, making consecutive inferences difficult.
     Remove this zero.  This is not perfect as a few genes have a non-zero last digit - ignore these for now.
@@ -20,6 +37,16 @@ def bsu_correction(bsu_num):
     
     return bsu_num
      
+
+def get_valid_preds(ref_model, dev_model = None):
+    """Return set of reactions that are to be tested against."""
+    
+    dev_rxns = set(Reaction.objects.filter(model_reaction__source=dev_model).distinct().values_list('name',flat=True))
+    ref_rxns = set(Reaction.objects.filter(model_reaction__source=ref_model).distinct().values_list('name',flat=True))
+    ref_not_dev = ref_rxns - dev_rxns
+    dev_not_ref = dev_rxns - ref_rxns
+    
+    return ref_not_dev, dev_rxns, ref_rxns, dev_not_ref
 
 class Command(BaseCommand):
     
@@ -46,68 +73,68 @@ class Command(BaseCommand):
                 sys.exit(1)
         
         ref_models = Source.objects.filter(reference_model=True).exclude(organism=dev_organism)
+
+        ref_not_dev, dev_rxns, ref_rxns, dev_not_ref = get_valid_preds(ref_model, dev_model)
+        
+        description = "\nInitial model quality"
+        evaluate_prediction_quality(dev_rxns, ref_rxns, description)
+        
+        ## Get all predicted additional reactions, along with number of models predicting those reactions
+        
+        pred_counts = Counter(zip(*list(
+            Reaction_pred.objects
+            .filter(dev_model=dev_model, status='add')
+            .values_list('reaction__db_reaction__name','ref_model__name')
+            .distinct()
+        ))[0]) 
+        
+        pred_set = set(pred_counts.keys())
+             
+        num_preds_ref = len(pred_set & ref_not_dev)
+        num_preds_not_ref = len(pred_set) - num_preds_ref
+         
+        print("\nAll predictions:\t{:5}\t{:5}\t{:.3f}".format(
+            num_preds_ref,
+            num_preds_not_ref,
+            num_preds_ref/float(len(pred_set))
+        ))
         
         
-        ## Start with number of times each reaction is predicted
+        ## Look at different numbers of predictions
         
-        dev_rxns = set(Reaction.objects.filter(model_reaction__source=dev_model).distinct().values_list('name',flat=True))
-        ref_rxns = set(Reaction.objects.filter(model_reaction__source=ref_model).distinct().values_list('name',flat=True))
-        ref_not_dev = ref_rxns - dev_rxns
-        dev_not_ref = dev_rxns - ref_rxns
-        
-        
-        ## a list of lists of reactions separated by number of reference models predicting reaction 
         num_model_predictions_lists = []
         
-        num_predictions = 0
+        num_model_predictions_values = sorted(list(set(pred_counts.values())))
         
-        num_reactions = 1
+        for num_models in num_model_predictions_values:
+            counted_pred_list = []
+            for rxn in pred_counts:
+                if pred_counts[rxn] == num_models:
+                    counted_pred_list.append(rxn)
+            
+            num_model_predictions_lists.append([num_models, counted_pred_list])
         
-#         while num_reactions > 0:
-#             
-#             num_predictions += 1
-#             
-#             try:
-#                 preds = zip(*list(Reaction.objects\
-#                     .filter(
-#                         model_reaction__reaction_pred__dev_model=dev_model,
-#                         model_reaction__reaction_pred__status='add'
-#                     )\
-#                     .values('model_reaction__reaction_pred__ref_model__name')\
-#                     .annotate(num_preds=Count('model_reaction__reaction_pred__ref_model__name'))\
-#                     .order_by()\
-#                     .filter(num_preds__eq=num_predictions)\
-#                     .values_list('name', 'num_preds')))[0]
-#             except:
-#                 preds = []
-#             
-#             num_reactions = len(preds)
-#             
-#             if num_reactions > 0:
-#                 num_model_predictions_lists.append(preds)
-#             
-#             
-#         """For each number of models predicting each reaction, for the reaction list calculate:
-#         
-#         1.    How many are in the reference model for the organism?
-#         2.    How many are not in the reference model for the organism?"""
-#         
-#         for idx, prediction_list in enumerate(num_model_predictions_lists):
-#             num_models_predicting = idx + 1
-#             pred_set = set(prediction_list)
-#             
-#             num_preds_ref = len(pred_set & ref_not_dev)
-#             num_preds_not_ref = len(pred_set) - num_preds_ref
-#             
-#             print("{:1} models:\t{:5}\t{:5}\t{}".format(
-#                 num_models_predicting,
-#                 num_preds_ref,
-#                 num_preds_not_ref,
-#                 num_preds_ref/float(len(pred_set))
-#             ))
+        
+        for pred_data in num_model_predictions_lists:
+            pred_set = pred_set - set(pred_data[1])
+            if len(pred_set) == 0:
+                break
+             
+            num_preds_ref = len(pred_set & ref_not_dev)
+            num_preds_not_ref = len(pred_set) - num_preds_ref
+             
+            
+            print("{:1} or more models:\t{:5}\t{:5}\t{:.3f}".format(
+                pred_data[0] + 1,
+                num_preds_ref,
+                num_preds_not_ref,
+                num_preds_ref/float(len(pred_set))
+            ))        
+
         
         ## Look at each prediction to see whether enzymes could be made up from adjacent genes in dev genome
         ##  - Assumes sequential numbering of all genes at end of locus tag
+        print("\nCandidate operon search:")
         
         predictions = Reaction_pred.objects.filter(dev_model=dev_model)
         
@@ -155,20 +182,11 @@ class Command(BaseCommand):
                         continue
                     locus_num_tag_dict[locus_num] = locus
                     locus_num_list.append(locus_num)
-                
-#                 preview_dict(locus_num_tag_dict)
-#                 preview_dict(locus_cog_dict)
-                
-#                 print("Number of non divisible locus numbers = {}".format(locus_nums_not_mult10))
-                
+                               
                 locus_nums_sorted = sorted(list(set(locus_num_list)))
-#                 print("\nLocus_nums_sorted:")
-#                 print locus_nums_sorted
-                
+               
                 ## COG set for COGzyme
                 cogzyme_cog_set = set(prediction.cogzyme.name.split(","))
-#                 print("\ncogzyme_cog_set:")
-#                 print cogzyme_cog_set
                 
                 
                 ## Look for sets of consecutive numbers (loci) of the correct length and test against COGzyme COGs
@@ -195,17 +213,17 @@ class Command(BaseCommand):
                         
                         preds_with_candidate_operons.append(prediction.reaction.db_reaction.name)
                         
-                        if prediction.reaction.db_reaction.name in ref_not_dev:
-                            print("\nSubset found for prediction {}:".format(prediction.pk))
-                         
-                            print("cogzyme_cog_set for genes:")
-                            print cogzyme_cog_set
-    
-                            print("gene_set:")
-                            print gene_set
-                            for locus in gene_set:
-                                print locus, locus_cog_dict[locus]
-                            print("--> correct prediction")
+#                         if prediction.reaction.db_reaction.name in ref_not_dev:
+#                             print("\nSubset found for prediction {}:".format(prediction.pk))
+#                          
+#                             print("cogzyme_cog_set for genes:")
+#                             print cogzyme_cog_set
+#     
+#                             print("gene_set:")
+#                             print gene_set
+#                             for locus in gene_set:
+#                                 print locus, locus_cog_dict[locus]
+#                             print("--> correct prediction")
 #                         else:
 #                             print("--> incorrect prediction")
                         
@@ -228,7 +246,7 @@ class Command(BaseCommand):
         num_preds_ref = len(pred_set & ref_not_dev)
         num_preds_not_ref = len(pred_set) - num_preds_ref
         
-        print("\nWith candidate operons:\t{:5}\t{:5}\t{}".format(
+        print("With candidate operons:\t{:5}\t{:5}\t{:.3f}".format(
             num_preds_ref,
             num_preds_not_ref,
             num_preds_ref/float(len(pred_set))
@@ -239,9 +257,92 @@ class Command(BaseCommand):
         num_preds_ref = len(pred_set & ref_not_dev)
         num_preds_not_ref = len(pred_set) - num_preds_ref
         
-        print("Without candidate operons:\t{:5}\t{:5}\t{}".format(
+        print("No candidate operons:\t{:5}\t{:5}\t{:.3f}".format(
             num_preds_ref,
             num_preds_not_ref,
             num_preds_ref/float(len(pred_set))
         ))                
                 
+                
+        ## Which is the best model for prediction?
+        print("\nResults for individual models:")
+        
+        for ref_model in ref_models:
+            pred_set = set(
+                Reaction_pred.objects
+                .filter(dev_model=dev_model, ref_model=ref_model, status='add')
+                .values_list('reaction__db_reaction__name', flat=True)
+                .distinct()
+            )
+            
+            description = "{} ({})".format(ref_model.name, ref_model.organism.taxonomy_id)
+            
+            evaluate_prediction_quality(pred_set, ref_not_dev, description)
+        
+        ## REMOVAL OF REACTIONS
+        
+        ## Get all predicted removed reactions, along with number of models predicting those removals
+        print("\nREMOVAL PREDICTIONS")
+        
+        pred_counts = Counter(zip(*list(
+            Reaction_pred.objects
+            .filter(dev_model=dev_model, status='rem')
+            .values_list('reaction__db_reaction__name','ref_model__name')
+            .distinct()
+        ))[0]) 
+        
+        pred_set = set(pred_counts.keys())
+             
+        num_preds_ref = len(pred_set & dev_not_ref)
+        num_preds_not_ref = len(pred_set) - num_preds_ref
+         
+        print("\nAll predictions:\t{:5}\t{:5}\t{:.3f}".format(
+            num_preds_ref,
+            num_preds_not_ref,
+            num_preds_ref/float(len(pred_set))
+        ))
+
+
+        ## Look at different numbers of predictions
+        
+        num_model_predictions_lists = []
+        
+        num_model_predictions_values = sorted(list(set(pred_counts.values())))
+        
+        for num_models in num_model_predictions_values:
+            counted_pred_list = []
+            for rxn in pred_counts:
+                if pred_counts[rxn] == num_models:
+                    counted_pred_list.append(rxn)
+            
+            num_model_predictions_lists.append([num_models, counted_pred_list])
+        
+        
+        for pred_data in num_model_predictions_lists:
+            pred_set = pred_set - set(pred_data[1])
+            if len(pred_set) == 0:
+                break
+             
+            num_preds_ref = len(pred_set & dev_not_ref)
+            num_preds_not_ref = len(pred_set) - num_preds_ref
+             
+            
+            print("{:1} or more models:\t{:5}\t{:5}\t{:.3f}".format(
+                pred_data[0] + 1,
+                num_preds_ref,
+                num_preds_not_ref,
+                num_preds_ref/float(len(pred_set))
+            ))       
+        
+        
+        ## 
+        
+        
+        
+        
+        
+        
+        
+        
+        
+          

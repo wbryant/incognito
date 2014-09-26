@@ -143,7 +143,13 @@ class Reaction_pred(models.Model):
     enzyme_type = models.ForeignKey(Enzyme_type, blank=True, null=True, default=None)
     cogzyme = models.ForeignKey(Cogzyme, blank=True, null=True, default=None)
     
-    
+    def __unicode__(self):
+        return "for model {}: reaction '{}' ({}, source ='{}', cogzyme {})".format(
+            self.dev_model.name,
+            self.reaction.db_reaction.name,
+            self.status,
+            self.ref_model.name,
+            self.cogzyme.name)
     
     
     
