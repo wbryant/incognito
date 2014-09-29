@@ -3,6 +3,7 @@ from django.db.models import Q, Count
 from annotation.models import *
 from cogzymes.models import *
 from myutils.general.utils import dict_append, preview_dict
+from myutils.stats import proportions
 import sys, os, re
 from collections import Counter
 
@@ -12,19 +13,48 @@ from myutils.general.mnxref_reac_extract import Rxn_ids
 
 def evaluate_prediction_quality(pred_set, ref_set, description = "Quality scores"):
     
-    if len(pred_set) == 0:
+    if ((not pred_set) or (len(pred_set) == 0)):
         return []
     
     num_preds_ref = len(pred_set & ref_set)
     num_preds_not_ref = len(pred_set) - num_preds_ref
     
-    print("{}:\t{:5}\t{:5}\t{:.3f}".format(
+    print("{}:\n\t-> {:5}\t{:5}\t{:.3f}".format(
         description,
         num_preds_ref,
         num_preds_not_ref,
         num_preds_ref/float(len(pred_set))
     )) 
+
+def evaluate_prediction_quality_diff(pred_set1, pred_set2, ref_set, significance_level = 0.05, description="pred_set1 against pred_set2"):
+    """Evaluate whether there is a statistically significant difference between the qualities of the two prediction sets.
     
+    tp - true positive
+    fp - false positive
+    """
+    
+    tp1 = len(pred_set1 & ref_set)
+    fp1 = len(pred_set1) - tp1
+    tp2 = len(pred_set2 & ref_set)
+    fp2 = len(pred_set1) - tp2
+    
+    
+    z_score, p_value = proportions.get_z_score(tp1, fp1, tp2, fp2, one_tail=False)
+    
+    print("\n{}:".format(description))
+    
+    if p_value <= significance_level:
+        if z_score > 0:
+            result = ", pred_set1 is higher quality than pred_set2"
+        else:
+            result = ", pred_set2 is higher quality than pred_set1"
+        not_or_empty = ""
+    else:
+        not_or_empty = "not "
+
+    print("\t-> Difference is {}significant (at p = {}){}.".format(not_or_empty, significance_level, result))
+    
+
 def bsu_correction(bsu_num):
     """Many BSU gene names have an excess 0 at the end, making consecutive inferences difficult.
     Remove this zero.  This is not perfect as a few genes have a non-zero last digit - ignore these for now.
@@ -89,16 +119,9 @@ class Command(BaseCommand):
         ))[0]) 
         
         pred_set = set(pred_counts.keys())
-             
-        num_preds_ref = len(pred_set & ref_not_dev)
-        num_preds_not_ref = len(pred_set) - num_preds_ref
-         
-        print("\nAll predictions:\t{:5}\t{:5}\t{:.3f}".format(
-            num_preds_ref,
-            num_preds_not_ref,
-            num_preds_ref/float(len(pred_set))
-        ))
         
+        evaluate_prediction_quality(pred_set, ref_not_dev, "\nAll predictions")
+       
         
         ## Look at different numbers of predictions
         
@@ -113,155 +136,137 @@ class Command(BaseCommand):
                     counted_pred_list.append(rxn)
             
             num_model_predictions_lists.append([num_models, counted_pred_list])
-        
-        
+          
         for pred_data in num_model_predictions_lists:
             pred_set = pred_set - set(pred_data[1])
             if len(pred_set) == 0:
                 break
-             
-            num_preds_ref = len(pred_set & ref_not_dev)
-            num_preds_not_ref = len(pred_set) - num_preds_ref
-             
             
-            print("{:1} or more models:\t{:5}\t{:5}\t{:.3f}".format(
-                pred_data[0] + 1,
-                num_preds_ref,
-                num_preds_not_ref,
-                num_preds_ref/float(len(pred_set))
-            ))        
+            description = "{:1} or more models".format(pred_data[0] + 1)
+            evaluate_prediction_quality(pred_set, ref_not_dev, description)       
 
         
-        ## Look at each prediction to see whether enzymes could be made up from adjacent genes in dev genome
-        ##  - Assumes sequential numbering of all genes at end of locus tag
-        print("\nCandidate operon search:")
-        
-        predictions = Reaction_pred.objects.filter(dev_model=dev_model)
-        
-        preds_with_candidate_operons = []
-        preds_without_candidate_operons = []
-        
-        more_preds_needed = True
-        num_preds_multi = 0
-        
-        for prediction in predictions:
-            
-            if not more_preds_needed:
-                break
-            
-            if num_preds_multi >= 10000:
-                more_preds_needed = False
-            if "," in prediction.cogzyme.name:
-#                 print("\n")
-#                 print prediction.cogzyme.name
-                num_preds_multi += 1
-                ## More than one COG in this COGzyme, so look for adjacent genes
-                locus_cog_data = Gene.objects\
-                    .filter(
-                        organism__source=dev_model,
-                        cogs__cogzyme=prediction.cogzyme)\
-                    .values('locus_tag','cogs__name').distinct()
-                
-                ## Create a dictionary of locus tags > COGs, nums > locus tags
-                locus_cog_dict = {}
-                locus_num_tag_dict = {}
-                locus_num_list = []
-                locus_nums_not_mult10 = 0
-#                 print locus_cog_data
-                for locus_cog in locus_cog_data:
-                    dict_append(locus_cog_dict,locus_cog['locus_tag'],locus_cog['cogs__name'])
-                    locus = locus_cog['locus_tag']
-#                     print locus
-                    try:
-                        locus_num = int(re.search('(\d+)[^0-9]*$',locus).group(1))
-                        if locus_num%10 == 0:
-                            locus_num = bsu_correction(locus_num)
-                        else:
-                            locus_nums_not_mult10 += 1
-                    except:
-                        continue
-                    locus_num_tag_dict[locus_num] = locus
-                    locus_num_list.append(locus_num)
-                               
-                locus_nums_sorted = sorted(list(set(locus_num_list)))
-               
-                ## COG set for COGzyme
-                cogzyme_cog_set = set(prediction.cogzyme.name.split(","))
-                
-                
-                ## Look for sets of consecutive numbers (loci) of the correct length and test against COGzyme COGs
-                operon_candidate = False
-                for idx, locus_group in groupby(enumerate(locus_nums_sorted), lambda (i,x):i-x):
-                    ## Get all COGs from this set of loci, do they contain the cogzyme?
-                    cog_list = []
-                    gene_list = []
-                    for locus_num in locus_group:
-                        locus_num = locus_num[1]
-                        tag = locus_num_tag_dict[locus_num]
-                        gene_list.append(tag)
-                        for cog in locus_cog_dict[tag]:
-                            cog_list.append(cog)
- 
-                    locus_cog_set = set(cog_list)
-                    gene_set = set(gene_list)
-                    
-                    if (cogzyme_cog_set <= locus_cog_set) & (len(cogzyme_cog_set) >= 3):
-
-                        
-                        ## COGs can be obtained for this cogzyme from this set of adjacent loci
-                        operon_candidate = True
-                        
-                        preds_with_candidate_operons.append(prediction.reaction.db_reaction.name)
-                        
-#                         if prediction.reaction.db_reaction.name in ref_not_dev:
-#                             print("\nSubset found for prediction {}:".format(prediction.pk))
-#                          
-#                             print("cogzyme_cog_set for genes:")
-#                             print cogzyme_cog_set
-#     
-#                             print("gene_set:")
-#                             print gene_set
-#                             for locus in gene_set:
-#                                 print locus, locus_cog_dict[locus]
-#                             print("--> correct prediction")
+#         ## Look at each prediction to see whether enzymes could be made up from adjacent genes in dev genome
+#         ##  - Assumes sequential numbering of all genes at end of locus tag
+#         print("\nCandidate operon search:")
+#         
+#         predictions = Reaction_pred.objects.filter(dev_model=dev_model)
+#         
+#         preds_with_candidate_operons = []
+#         preds_without_candidate_operons = []
+#         
+#         more_preds_needed = True
+#         num_preds_multi = 0
+#         
+#         for prediction in predictions:
+#             
+#             if not more_preds_needed:
+#                 break
+#             
+#             if num_preds_multi >= 10000:
+#                 more_preds_needed = False
+#             if "," in prediction.cogzyme.name:
+# #                 print("\n")
+# #                 print prediction.cogzyme.name
+#                 num_preds_multi += 1
+#                 ## More than one COG in this COGzyme, so look for adjacent genes
+#                 locus_cog_data = Gene.objects\
+#                     .filter(
+#                         organism__source=dev_model,
+#                         cogs__cogzyme=prediction.cogzyme)\
+#                     .values('locus_tag','cogs__name').distinct()
+#                 
+#                 ## Create a dictionary of locus tags > COGs, nums > locus tags
+#                 locus_cog_dict = {}
+#                 locus_num_tag_dict = {}
+#                 locus_num_list = []
+#                 locus_nums_not_mult10 = 0
+# #                 print locus_cog_data
+#                 for locus_cog in locus_cog_data:
+#                     dict_append(locus_cog_dict,locus_cog['locus_tag'],locus_cog['cogs__name'])
+#                     locus = locus_cog['locus_tag']
+# #                     print locus
+#                     try:
+#                         locus_num = int(re.search('(\d+)[^0-9]*$',locus).group(1))
+#                         if locus_num%10 == 0:
+#                             locus_num = bsu_correction(locus_num)
 #                         else:
-#                             print("--> incorrect prediction")
-                        
-                        
-                        
-                        
-                        ## Break, but if actual operons are required, will have to run through all groups of adjacent loci
-                        break
-                
-                if not operon_candidate:
-                    preds_without_candidate_operons.append(prediction.reaction.db_reaction.name)
-                        
-        ## Test predictions against reference model
-        
-        p_w_co = set(preds_with_candidate_operons)
-        p_wo_co = set(preds_without_candidate_operons)
-        
-        ## p_w_co
-        pred_set = p_w_co
-        num_preds_ref = len(pred_set & ref_not_dev)
-        num_preds_not_ref = len(pred_set) - num_preds_ref
-        
-        print("With candidate operons:\t{:5}\t{:5}\t{:.3f}".format(
-            num_preds_ref,
-            num_preds_not_ref,
-            num_preds_ref/float(len(pred_set))
-        ))                
-        
-        ## p_wo_co
-        pred_set = p_wo_co
-        num_preds_ref = len(pred_set & ref_not_dev)
-        num_preds_not_ref = len(pred_set) - num_preds_ref
-        
-        print("No candidate operons:\t{:5}\t{:5}\t{:.3f}".format(
-            num_preds_ref,
-            num_preds_not_ref,
-            num_preds_ref/float(len(pred_set))
-        ))                
+#                             locus_nums_not_mult10 += 1
+#                     except:
+#                         continue
+#                     locus_num_tag_dict[locus_num] = locus
+#                     locus_num_list.append(locus_num)
+#                                
+#                 locus_nums_sorted = sorted(list(set(locus_num_list)))
+#                
+#                 ## COG set for COGzyme
+#                 cogzyme_cog_set = set(prediction.cogzyme.name.split(","))
+#                 
+#                 
+#                 ## Look for sets of consecutive numbers (loci) of the correct length and test against COGzyme COGs
+#                 operon_candidate = False
+#                 for idx, locus_group in groupby(enumerate(locus_nums_sorted), lambda (i,x):i-x):
+#                     ## Get all COGs from this set of loci, do they contain the cogzyme?
+#                     cog_list = []
+#                     gene_list = []
+#                     for locus_num in locus_group:
+#                         locus_num = locus_num[1]
+#                         tag = locus_num_tag_dict[locus_num]
+#                         gene_list.append(tag)
+#                         for cog in locus_cog_dict[tag]:
+#                             cog_list.append(cog)
+#  
+#                     locus_cog_set = set(cog_list)
+#                     gene_set = set(gene_list)
+#                     
+#                     if (cogzyme_cog_set <= locus_cog_set) & (len(cogzyme_cog_set) >= 3):
+# 
+#                         
+#                         ## COGs can be obtained for this cogzyme from this set of adjacent loci
+#                         operon_candidate = True
+#                         
+#                         preds_with_candidate_operons.append(prediction.reaction.db_reaction.name)
+#                         
+# #                         if prediction.reaction.db_reaction.name in ref_not_dev:
+# #                             print("\nSubset found for prediction {}:".format(prediction.pk))
+# #                          
+# #                             print("cogzyme_cog_set for genes:")
+# #                             print cogzyme_cog_set
+# #     
+# #                             print("gene_set:")
+# #                             print gene_set
+# #                             for locus in gene_set:
+# #                                 print locus, locus_cog_dict[locus]
+# #                             print("--> correct prediction")
+# #                         else:
+# #                             print("--> incorrect prediction")
+#                         
+#                         
+#                         
+#                         
+#                         ## Break, but if actual operons are required, will have to run through all groups of adjacent loci
+#                         break
+#                 
+#                 if not operon_candidate:
+#                     preds_without_candidate_operons.append(prediction.reaction.db_reaction.name)
+#                         
+#         ## Test predictions against reference model
+#         
+#         p_w_co = set(preds_with_candidate_operons)
+#         p_wo_co = set(preds_without_candidate_operons)
+#         
+#         ## p_w_co
+#         pred_set = p_w_co
+#         
+#         description = "With candidate operons"
+#         evaluate_prediction_quality(pred_set, ref_not_dev, description)
+#              
+#         
+#         ## p_wo_co
+#         pred_set = p_wo_co
+# 
+#         description = "No candidate operons"
+#         evaluate_prediction_quality(pred_set, ref_not_dev, description)                    
                 
                 
         ## Which is the best model for prediction?
@@ -292,15 +297,10 @@ class Command(BaseCommand):
         ))[0]) 
         
         pred_set = set(pred_counts.keys())
-             
-        num_preds_ref = len(pred_set & dev_not_ref)
-        num_preds_not_ref = len(pred_set) - num_preds_ref
-         
-        print("\nAll predictions:\t{:5}\t{:5}\t{:.3f}".format(
-            num_preds_ref,
-            num_preds_not_ref,
-            num_preds_ref/float(len(pred_set))
-        ))
+        
+        description = "\nAll predictions"
+        evaluate_prediction_quality(pred_set, dev_not_ref, description)
+        
 
 
         ## Look at different numbers of predictions
@@ -323,22 +323,52 @@ class Command(BaseCommand):
             if len(pred_set) == 0:
                 break
              
-            num_preds_ref = len(pred_set & dev_not_ref)
-            num_preds_not_ref = len(pred_set) - num_preds_ref
-             
-            
-            print("{:1} or more models:\t{:5}\t{:5}\t{:.3f}".format(
-                pred_data[0] + 1,
-                num_preds_ref,
-                num_preds_not_ref,
-                num_preds_ref/float(len(pred_set))
-            ))       
+            description = "{:1} or more models".format(pred_data[0] + 1)
+            evaluate_prediction_quality(pred_set, dev_not_ref, description)
         
+    
+        ## Model, Suspect and Hidden COGzymes - any difference?
+        ## -> Prediction type precalculated for all predictions, so should be simple to implement
         
-        ## 
+        ## Model
+        pred_set_model = set(
+                Reaction_pred.objects
+                .filter(dev_model=dev_model, type = 'mod', status='add')
+                .values_list('reaction__db_reaction__name', flat=True)
+                .distinct()
+            )
         
+        description = "\nCOGzymes already in model"
+        evaluate_prediction_quality(pred_set_model, ref_not_dev, description)
         
+        ## Suspect
+        pred_set_suspect = set(
+                Reaction_pred.objects
+                .filter(dev_model=dev_model, type = 'sus', status='add')
+                .values_list('reaction__db_reaction__name', flat=True)
+                .distinct()
+            )
         
+        description = "COGzyme components already in model"
+        evaluate_prediction_quality(pred_set_suspect, ref_not_dev, description)
+        
+        ## Hidden
+        pred_set_hidden = set(
+                Reaction_pred.objects
+                .filter(dev_model=dev_model, type = 'hid', status='add')
+                .values_list('reaction__db_reaction__name', flat=True)
+                .distinct()
+            )
+        
+        description = "COGzyme components not all in model"
+        evaluate_prediction_quality(pred_set_hidden, ref_not_dev, description)
+        
+        pred_set_non_model = pred_set_suspect | pred_set_hidden
+        
+        evaluate_prediction_quality(pred_set_non_model, ref_not_dev)
+        
+        description = "Testing model COGzyme against non-model COGzyme predictions"
+        evaluate_prediction_quality_diff(pred_set_model, pred_set_non_model, ref_not_dev, description=description)
         
         
         
