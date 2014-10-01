@@ -100,6 +100,8 @@ class Cogzyme(models.Model):
     
     name = models.CharField(max_length=255, unique = True)
     cogs = models.ManyToManyField(Cog)
+    
+    ## THIS SHOULD BE A RELATION IN THE ENZYME!!!!
     enzymes = models.ManyToManyField(Enzyme)
     
     def __unicode__(self):
