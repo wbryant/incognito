@@ -8,13 +8,23 @@ from django.db import models
 class Migration(SchemaMigration):
 
     def forwards(self, orm):
-        # Removing unique constraint on 'Cogzyme', fields ['name']
-        db.delete_unique(u'cogzymes_cogzyme', ['name'])
+        # Deleting field 'Enzyme.new_cogzyme'
+        db.rename_column(u'cogzymes_enzyme', 'new_cogzyme_id', 'cogzyme_id')
+
+#         # Adding field 'Enzyme.cogzyme'
+#         db.add_column(u'cogzymes_enzyme', 'cogzyme',
+#                       self.gf('django.db.models.fields.related.ForeignKey')(default=None, related_name='cog_enzymes', null=True, blank=True, to=orm['cogzymes.Cogzyme']),
+#                       keep_default=False)
 
 
     def backwards(self, orm):
-        # Adding unique constraint on 'Cogzyme', fields ['name']
-        db.create_unique(u'cogzymes_cogzyme', ['name'])
+#         # Adding field 'Enzyme.new_cogzyme'
+#         db.add_column(u'cogzymes_enzyme', 'new_cogzyme',
+#                       self.gf('django.db.models.fields.related.ForeignKey')(default=None, related_name='cog_enzymes', null=True, to=orm['cogzymes.Cogzyme'], blank=True),
+#                       keep_default=False)
+
+        # Deleting field 'Enzyme.cogzyme'
+        db.rename_column(u'cogzymes_enzyme', 'cogzyme_id', 'new_cogzyme_id')
 
 
     models = {
@@ -124,12 +134,12 @@ class Migration(SchemaMigration):
         u'cogzymes.cogzyme': {
             'Meta': {'object_name': 'Cogzyme'},
             'cogs': ('django.db.models.fields.related.ManyToManyField', [], {'to': u"orm['cogzymes.Cog']", 'symmetrical': 'False'}),
-            'enzymes': ('django.db.models.fields.related.ManyToManyField', [], {'to': u"orm['cogzymes.Enzyme']", 'symmetrical': 'False'}),
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'name': ('django.db.models.fields.CharField', [], {'max_length': '255'})
+            'name': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '255'})
         },
         u'cogzymes.enzyme': {
             'Meta': {'object_name': 'Enzyme'},
+            'cogzyme': ('django.db.models.fields.related.ForeignKey', [], {'default': 'None', 'related_name': "'cog_enzymes'", 'null': 'True', 'blank': 'True', 'to': u"orm['cogzymes.Cogzyme']"}),
             'genes': ('django.db.models.fields.related.ManyToManyField', [], {'to': u"orm['cogzymes.Gene']", 'symmetrical': 'False'}),
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'name': ('django.db.models.fields.CharField', [], {'max_length': '2500'}),

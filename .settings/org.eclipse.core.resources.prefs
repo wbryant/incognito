@@ -4,3 +4,4 @@ encoding//annotation/migrations/0013_auto.py=utf-8
 encoding//annotation/migrations/0016_auto__del_mapping_method__add_method__add_model_reaction_to_mapping__d.py=utf-8
 encoding//annotation/migrations/0017_auto__chg_field_model_reaction_gpr.py=utf-8
 encoding//annotation/migrations/0018_auto__add_field_source_organism.py=utf-8
+encoding//cogzymes/migrations/0003_auto__del_field_enzyme_new_cogzyme__add_field_enzyme_cogzyme.py=utf-8

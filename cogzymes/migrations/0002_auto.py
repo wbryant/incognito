@@ -8,39 +8,19 @@ from django.db import models
 class Migration(SchemaMigration):
 
     def forwards(self, orm):
-        # Deleting field 'Reaction_pred.dev_organism'
-        db.delete_column(u'cogzymes_reaction_pred', 'dev_organism_id')
-
-        # Deleting field 'Reaction_pred.ref_organism'
-        db.delete_column(u'cogzymes_reaction_pred', 'ref_organism_id')
-
-        # Adding field 'Reaction_pred.dev_model'
-        db.add_column(u'cogzymes_reaction_pred', 'dev_model',
-                      self.gf('django.db.models.fields.related.ForeignKey')(default=None, related_name='dev_model_preds', to=orm['annotation.Source']),
-                      keep_default=False)
-
-        # Adding field 'Reaction_pred.ref_model'
-        db.add_column(u'cogzymes_reaction_pred', 'ref_model',
-                      self.gf('django.db.models.fields.related.ForeignKey')(default=None, related_name='ref_model_preds', to=orm['annotation.Source']),
-                      keep_default=False)
+        # Removing M2M table for field enzymes on 'Cogzyme'
+        db.delete_table(db.shorten_name(u'cogzymes_cogzyme_enzymes'))
 
 
     def backwards(self, orm):
-        # Adding field 'Reaction_pred.dev_organism'
-        db.add_column(u'cogzymes_reaction_pred', 'dev_organism',
-                      self.gf('django.db.models.fields.related.ForeignKey')(default=None, related_name='dev_organism_preds', to=orm['cogzymes.Organism']),
-                      keep_default=False)
-
-        # Adding field 'Reaction_pred.ref_organism'
-        db.add_column(u'cogzymes_reaction_pred', 'ref_organism',
-                      self.gf('django.db.models.fields.related.ForeignKey')(default=None, related_name='ref_organism_preds', to=orm['cogzymes.Organism']),
-                      keep_default=False)
-
-        # Deleting field 'Reaction_pred.dev_model'
-        db.delete_column(u'cogzymes_reaction_pred', 'dev_model_id')
-
-        # Deleting field 'Reaction_pred.ref_model'
-        db.delete_column(u'cogzymes_reaction_pred', 'ref_model_id')
+        # Adding M2M table for field enzymes on 'Cogzyme'
+        m2m_table_name = db.shorten_name(u'cogzymes_cogzyme_enzymes')
+        db.create_table(m2m_table_name, (
+            ('id', models.AutoField(verbose_name='ID', primary_key=True, auto_created=True)),
+            ('cogzyme', models.ForeignKey(orm[u'cogzymes.cogzyme'], null=False)),
+            ('enzyme', models.ForeignKey(orm[u'cogzymes.enzyme'], null=False))
+        ))
+        db.create_unique(m2m_table_name, ['cogzyme_id', 'enzyme_id'])
 
 
     models = {
@@ -80,6 +60,13 @@ class Migration(SchemaMigration):
             'name': ('django.db.models.fields.CharField', [], {'max_length': '200'}),
             'protein_gi': ('django.db.models.fields.IntegerField', [], {})
         },
+        u'annotation.mapping': {
+            'Meta': {'object_name': 'Mapping'},
+            'group': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['annotation.Reaction_group']"}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'method': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['annotation.Method']"}),
+            'reaction': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'reaction_mapped'", 'to': u"orm['annotation.Model_reaction']"})
+        },
         u'annotation.metabolite': {
             'Meta': {'object_name': 'Metabolite'},
             'id': ('django.db.models.fields.CharField', [], {'max_length': '100', 'primary_key': 'True'}),
@@ -104,28 +91,17 @@ class Migration(SchemaMigration):
         u'annotation.model_reaction': {
             'Meta': {'object_name': 'Model_reaction'},
             'curated_db_link': ('django.db.models.fields.BooleanField', [], {'default': 'True'}),
+            'db_mapping_method': ('django.db.models.fields.CharField', [], {'default': 'None', 'max_length': '3', 'null': 'True', 'blank': 'True'}),
             'db_reaction': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['annotation.Reaction']", 'null': 'True', 'blank': 'True'}),
             'gpr': ('django.db.models.fields.CharField', [], {'max_length': '10000'}),
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'mapping': ('django.db.models.fields.related.ManyToManyField', [], {'default': 'None', 'to': u"orm['annotation.Model_reaction_mapping']", 'through': u"orm['annotation.Model_reaction_to_mapping']", 'blank': 'True', 'symmetrical': 'False', 'null': 'True'}),
-            'metabolites': ('django.db.models.fields.related.ManyToManyField', [], {'related_name': "'metabolites_related'", 'symmetrical': 'False', 'to': u"orm['annotation.Model_metabolite']"}),
+            'mapping': ('django.db.models.fields.related.ManyToManyField', [], {'default': 'None', 'to': u"orm['annotation.Reaction_group']", 'through': u"orm['annotation.Mapping']", 'blank': 'True', 'symmetrical': 'False', 'null': 'True'}),
+            'metabolites': ('django.db.models.fields.related.ManyToManyField', [], {'related_name': "'metabolites_of_reaction'", 'symmetrical': 'False', 'to': u"orm['annotation.Model_metabolite']"}),
             'model_id': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
             'name': ('django.db.models.fields.CharField', [], {'max_length': '2000'}),
-            'products': ('django.db.models.fields.related.ManyToManyField', [], {'related_name': "'products_related'", 'symmetrical': 'False', 'to': u"orm['annotation.Model_metabolite']"}),
+            'products': ('django.db.models.fields.related.ManyToManyField', [], {'related_name': "'products_of_reaction'", 'symmetrical': 'False', 'to': u"orm['annotation.Model_metabolite']"}),
             'source': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['annotation.Source']"}),
-            'substrates': ('django.db.models.fields.related.ManyToManyField', [], {'to': u"orm['annotation.Model_metabolite']", 'symmetrical': 'False'})
-        },
-        u'annotation.model_reaction_mapping': {
-            'Meta': {'object_name': 'Model_reaction_mapping'},
-            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'name': ('django.db.models.fields.CharField', [], {'default': "''", 'max_length': '100'})
-        },
-        u'annotation.model_reaction_to_mapping': {
-            'Meta': {'object_name': 'Model_reaction_to_mapping'},
-            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'method': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['annotation.Method']"}),
-            'model_reaction': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['annotation.Model_reaction']"}),
-            'model_reaction_mapping': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['annotation.Model_reaction_mapping']"})
+            'substrates': ('django.db.models.fields.related.ManyToManyField', [], {'related_name': "'substrates_of_reaction'", 'symmetrical': 'False', 'to': u"orm['annotation.Model_metabolite']"})
         },
         u'annotation.reaction': {
             'Meta': {'object_name': 'Reaction'},
@@ -135,10 +111,16 @@ class Migration(SchemaMigration):
             'name': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
             'source': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['annotation.Source']"})
         },
+        u'annotation.reaction_group': {
+            'Meta': {'object_name': 'Reaction_group'},
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'name': ('django.db.models.fields.CharField', [], {'default': "''", 'max_length': '100'})
+        },
         u'annotation.source': {
             'Meta': {'object_name': 'Source'},
             'name': ('django.db.models.fields.CharField', [], {'max_length': '50', 'primary_key': 'True'}),
-            'organism': ('django.db.models.fields.related.ForeignKey', [], {'default': 'None', 'to': u"orm['cogzymes.Organism']", 'null': 'True', 'blank': 'True'})
+            'organism': ('django.db.models.fields.related.ForeignKey', [], {'default': 'None', 'to': u"orm['cogzymes.Organism']", 'null': 'True', 'blank': 'True'}),
+            'reference_model': ('django.db.models.fields.NullBooleanField', [], {'default': 'False', 'null': 'True', 'blank': 'True'})
         },
         u'cogzymes.cog': {
             'Meta': {'object_name': 'Cog'},
@@ -148,7 +130,6 @@ class Migration(SchemaMigration):
         u'cogzymes.cogzyme': {
             'Meta': {'object_name': 'Cogzyme'},
             'cogs': ('django.db.models.fields.related.ManyToManyField', [], {'to': u"orm['cogzymes.Cog']", 'symmetrical': 'False'}),
-            'enzymes': ('django.db.models.fields.related.ManyToManyField', [], {'to': u"orm['cogzymes.Enzyme']", 'symmetrical': 'False'}),
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'name': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '255'})
         },
@@ -157,6 +138,7 @@ class Migration(SchemaMigration):
             'genes': ('django.db.models.fields.related.ManyToManyField', [], {'to': u"orm['cogzymes.Gene']", 'symmetrical': 'False'}),
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'name': ('django.db.models.fields.CharField', [], {'max_length': '2500'}),
+            'new_cogzyme': ('django.db.models.fields.related.ForeignKey', [], {'default': 'None', 'related_name': "'cog_enzymes'", 'null': 'True', 'blank': 'True', 'to': u"orm['cogzymes.Cogzyme']"}),
             'reactions': ('django.db.models.fields.related.ManyToManyField', [], {'related_name': "'cog_enzymes'", 'symmetrical': 'False', 'to': u"orm['annotation.Model_reaction']"}),
             'source': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'cog_enzymes'", 'to': u"orm['annotation.Source']"}),
             'type': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['cogzymes.Enzyme_type']"})

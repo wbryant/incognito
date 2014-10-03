@@ -86,7 +86,7 @@ class Enzyme(models.Model):
     source = models.ForeignKey('annotation.Source', related_name = 'cog_enzymes')
     reactions = models.ManyToManyField('annotation.Model_reaction', related_name = 'cog_enzymes')
     type = models.ForeignKey('Enzyme_type')
-    new_cogzyme = models.ForeignKey('Cogzyme', blank = True, null = True, default = None, related_name = 'new_enzyme')
+    cogzyme = models.ForeignKey('Cogzyme', blank = True, null = True, default = None, related_name = 'cog_enzymes')
      
     def __unicode__(self):
         return "%s (%s for organism %s)" % (self.name, self.source.name, self.source.organism.taxonomy_id)
@@ -103,7 +103,7 @@ class Cogzyme(models.Model):
     cogs = models.ManyToManyField(Cog)
     
     ## THIS SHOULD BE A RELATION IN THE ENZYME!!!!
-    enzymes = models.ManyToManyField(Enzyme)
+    ##enzymes = models.ManyToManyField(Enzyme)
     
     def __unicode__(self):
         return "'{}'".format(self.name)
