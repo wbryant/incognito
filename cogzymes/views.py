@@ -154,8 +154,6 @@ def model(request, model_specified = None):
         'prediction_data': prediction_data,
         'summary':  summary
     })
-
-    
 #     return render_to_response('model.html', {
 #         'source': source, 
 #         'model_rxns': model_reactions, 
@@ -163,5 +161,9 @@ def model(request, model_specified = None):
 #         'rxn_equivalents': rxn_equivalents
 #     })
 
+
 def model_unselected(request):
     return render_to_response('model_unselected.html')
+
+def cogzyme(request, cogzyme_specified = False):
+    
