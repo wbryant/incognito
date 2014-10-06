@@ -56,14 +56,14 @@ LOCAL_APPS = (
 INSTALLED_APPS = DEFAULT_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE_CLASSES = (
-    'django.middleware.cache.UpdateCacheMiddleware',
+#     'django.middleware.cache.UpdateCacheMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django.middleware.cache.FetchFromCacheMiddleware',
+#     'django.middleware.cache.FetchFromCacheMiddleware',
 )
 
 ROOT_URLCONF = 'incognito.urls'
@@ -117,7 +117,14 @@ SESSION_FILE_PATH = "/Users/wbryant/git/incognito/sessions"
 
 ## Cache information
 
-CACHE_BACKEND = 'memcached://127.0.0.1:11211/'
-CACHE_MIDDLEWARE_SECONDS = 600
-CACHE_MIDDLEWARE_KEY_PREFIX = "incognito"
+# CACHE_BACKEND = 'memcached://127.0.0.1:11211/'
+# CACHE_MIDDLEWARE_SECONDS = 600
+# CACHE_MIDDLEWARE_KEY_PREFIX = "incognito"
+# 
+# CACHES = {
+#     'default': {
+#         'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
+#         'LOCATION': '127.0.0.1:11211',
+#     }
+# }
 

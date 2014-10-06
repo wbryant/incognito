@@ -166,4 +166,4 @@ def model_unselected(request):
     return render_to_response('model_unselected.html')
 
 def cogzyme(request, cogzyme_specified = False):
-    
+    return render_to_response('cogzyme.html')
