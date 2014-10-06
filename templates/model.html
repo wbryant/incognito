@@ -33,7 +33,7 @@
         
             <nav id="top_menu" class="horizontal_menu">
                 <a class="home" href="/home">Home</a>
-                <a class="model focus selected" href="/model">Model{% if model_specified != None %}: {{ model_specified }} {% endif %}</a>
+                <a class="model focus selected" href="/model{% if model_specified != None %}/id:{{ model_specified }}{% endif %}">Model{% if model_specified != None %}: {{ model_specified }} {% endif %}</a>
             </nav>
         </header>
         
