@@ -34,14 +34,12 @@
             <nav id="top_menu" class="horizontal_menu">
                 <a class="home{% block home %}{% endblock %}" href="/home">Home</a>
                 <a class="model{% block model %}{% endblock %}" href="/model{% if model_specified != None %}/id:{{ model_specified }}{% endif %}">Model{% if model_specified != None %}: {{ model_specified }} {% endif %}</a>
-                <a class="cogzyme{% block cogzyme %}{% endblock %}" href="/cogzyme{% if cogzyme_specified != None %}/id:{{ cogzyme_specified }}{% endif %}">COGzyme{% if cogzyme_specified != None %}: {{ cogzyme_specified }} {% endif %}</a>
+                <a class="cogzyme{% block cogzyme %}{% endblock %}" href="/cogzyme{% if cogzyme_specified != None %}/id:{{ cogzyme_specified }}{% endif %}">COGzyme{% if cogzyme_specified != None %}: {{ cogzyme_short_name }} {% endif %}</a>
                 <a class="cog{% block cog %}{% endblock %}" href="/cog{% if cog_specified != None %}/id:{{ cog_specified }}{% endif %}">COG{% if cog_specified != None %}: {{ cog_specified }} {% endif %}</a>
             </nav>
         </header>
         
-        <section id="data">
-            {% block data %}No data exists on this page ... {% endblock %}   
-        </section>
+        {% block data %}No data exists on this page ... {% endblock %}   
 
         <footer>
             <p>

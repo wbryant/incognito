@@ -1,74 +1,32 @@
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        
-        {% load staticfiles %}
-        
-        <meta charset="utf-8">
+{% extends "base.html" %}
 
-        <!-- Always force latest IE rendering engine (even in intranet) & Chrome Frame
-        Remove this if you use the .htaccess -->
-        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+{% block home %} focus selected {% endblock %}
 
-        <title>InCOGnito: Available Models</title>
-        <meta name="description" content="">
-        <meta name="author" content="wbryant">
-
-        <meta name="viewport" content="width=device-width; initial-scale=1.0">
-
-        <style type="text/css" title="currentStyle">
-            @import "{% static "css/incognito.css" %}";
-            @import "{% static "css/jquery.dataTables.css" %}";
-        </style>
-        
-        <script type="text/javascript" src="{% static "js/jquery.js" %}"></script>
-        <script type="text/javascript" src="{% static "js/jquery.dataTables.js" %}"></script>
-        <script src="{% static "js/incognito.js" %}"></script>
-    </head>
-
-    <body id="home_body">
-
-        <header>
-            <h1 id="title">InCOGnito</h1>
-        
-            <nav id="top_menu" class="horizontal_menu">
-                <a class="home focus selected" href="/home">Home</a>
-                <a class="model" href="/model{% if model_specified != None %}/id:{{ model_specified }}{% endif %}">Model{% if model_specified != None %}: {{ model_specified }} {% endif %}</a>
-            </nav>
-        </header>
-        
-        <section id="data">
-            <table id="table1" class="display datatable">
-                <thead>
-                    <tr>
-                        <th>Model ID</th>
-                        <th>Organism taxonomy ID</th>
-                        <th>Number of Reactions</th>
-                        <th>Number of Metabolites</th>
-                        <th>Number of Reaction Predictions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% if model_data %}
-                    {% for model in model_data %}
-                    <tr>
-                        <td><a href="/model/id:{{ model.model_id }}">{{ model.model_id }}</a></td>
-                        <td>{{ model.tax_id }}</td>
-                        <td>{{ model.Number_of_Reactions }}</td>
-                        <td>{{ model.Number_of_Metabolites }}</td>
-                        <td>{{ model.Number_of_Predictions }}</td>
-                    </tr>
-                    {% endfor %}
-                {% endif %}
-                </tbody>
-            </table>   
-        </section>
-
-        <footer>
-            <p>
-                &copy; Copyright Will Bryant
-            </p>
-        </footer>
-        
-    </body>
-</html>
+{% block data %}
+<section id="data">
+    <table id="table1" class="display datatable">
+        <thead>
+            <tr>
+                <th>Model ID</th>
+                <th>Organism taxonomy ID</th>
+                <th>Number of Reactions</th>
+                <th>Number of Metabolites</th>
+                <th>Number of Reaction Predictions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% if model_data %}
+            {% for model in model_data %}
+            <tr>
+                <td><a href="/model/id:{{ model.model_id }}">{{ model.model_id }}</a></td>
+                <td>{{ model.tax_id }}</td>
+                <td>{{ model.Number_of_Reactions }}</td>
+                <td>{{ model.Number_of_Metabolites }}</td>
+                <td>{{ model.Number_of_Predictions }}</td>
+            </tr>
+            {% endfor %}
+        {% endif %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

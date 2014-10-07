@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block cogzyme %} focus selected{% endblock %}
+
+{% block data %}
+<section id="cogzyme_summary"> COGzyme "{{ cogzyme_specified }}" has been found. </section>
+
+<section id="cogzyme_cogs">
+    <p>COGS:</p>
+    <p>
+        {% for cog_name in cogzyme_data.cogs %}
+        <a href="/cog/id:{{ cog_name }}">{{ cog_name }}</a>, 
+        {% endfor %}
+    </p>
+    
+    <p>Model Reactions:</p>
+    
+<section id="tabs">
+    <nav id="tab_menu" class="horizontal_menu">
+        <a href="#tab-1">Enzymes</a>
+        <a href="#tab-2">Model Reactions</a>
+    </nav>
+    
+    <p class="loader">loading ...</p>
+    
+    <div class="tab" id="tab-1">
+        <table id="enzymes" class="display datatable">
+            <thead><tr>
+                <td>Name</td>
+                <td>Model Source</td>                
+            </tr></thead>
+            <tbody>
+            {% for enz in cogzyme_data.enzymes %}
+                <tr>
+                    <td>{{ enz.name }}</td>
+                    <td>{{ enz.source__name }}</td>               
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>  
+    </div>
+
+    <div class="tab" id="tab-2">
+        <table id="model_reactions" class="display datatable">
+            <thead><tr>
+                <td>ID (from model)</td>
+                <td>Name</td>        
+                <td>MNX Reaction</td>        
+                <td>Equivalents</td>        
+                <td>GPR</td>        
+            </tr></thead>
+            <tbody>
+            {% for rxn in model_rxns_data %}
+                <tr>
+                    <td>{{ rxn.model_id }}</td>
+                    <td>{{ rxn.name }}</td>        
+                    <td>{{ rxn.db_reaction__name }}</td>        
+                    <td>{{ rxn.equiv_count }}</td>        
+                    <td>{{ rxn.gpr }}</td>        
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>   
+    </div>
+       
+</section>
+{% endblock %}

@@ -2,13 +2,16 @@
 
 from django.shortcuts import render_to_response
 from annotation.models import Model_reaction, Source, Model_metabolite, Reaction_group, Reaction
-from cogzymes.models import Reaction_pred, Cogzyme, Gene
+from cogzymes.models import Reaction_pred, Cogzyme, Gene, Enzyme, Cog
 from django.db.models import Count
 from myutils.general.utils import dict_append, preview_dict
 
 def home(request):
     
-    model_specified = request.session.get('model_specified') 
+    model_specified = request.session.get('model_specified')
+    cogzyme_specified = request.session.get('cogzyme_specified')
+    cog_specified = request.session.get('cog_specified')
+    cogzyme_short_name = request.session.get('cogzyme_short_name')
  
     model_data = []
     for model in Source.objects.filter(organism__isnull = False):
@@ -30,11 +33,20 @@ def home(request):
     
     return render_to_response('home.html', {
         'model_data': model_data,
-        'model_specified': model_specified
+        'model_specified': model_specified,
+        'cog_specified': cog_specified,
+        'cogzyme_specified': cogzyme_specified,
+        'cogzyme_short_name': cogzyme_short_name
     })
-    
+
+
+   
 
 def model(request, model_specified = None):
+
+    cogzyme_specified = request.session.get('cogzyme_specified')
+    cog_specified = request.session.get('cog_specified')
+    cogzyme_short_name = request.session.get('cogzyme_short_name')
     
     #model_specified = request.session.get('model_specified')
     
@@ -151,8 +163,11 @@ def model(request, model_specified = None):
     return render_to_response('model.html', {                                  
         'model_rxns_data': model_rxns_data,
         'model_specified': model_specified,
+        'cog_specified': cog_specified,
+        'cogzyme_specified': cogzyme_specified,
         'prediction_data': prediction_data,
-        'summary':  summary
+        'summary':  summary,
+        'cogzyme_short_name': cogzyme_short_name
     })
 #     return render_to_response('model.html', {
 #         'source': source, 
@@ -165,5 +180,71 @@ def model(request, model_specified = None):
 def model_unselected(request):
     return render_to_response('model_unselected.html')
 
-def cogzyme(request, cogzyme_specified = False):
-    return render_to_response('cogzyme.html')
+def cogzyme(request, cogzyme_specified = None):
+
+    ## Keep track of current selections
+    model_specified = request.session.get('model_specified')
+    cog_specified = request.session.get('cog_specified')
+    
+    ## Determine whether COGzyme is already specified
+    if not cogzyme_specified:
+        ## Is cogzyme already specified?
+        cogzyme_specified = request.session.get('cogzyme_specified')
+        if not cogzyme_specified:
+            render_to_response('cogzyme_unselected.html')
+    
+    ## Is specified value valid?
+    try:
+        cogzyme = Cogzyme.objects.get(name=cogzyme_specified)
+        request.session['cogzyme_specified'] = cogzyme_specified
+    except:
+        return render_to_response('cogzyme_not_found.html', {'cogzyme_specified': cogzyme_specified})
+    
+    ## Get COGzyme data
+    cogzyme_data = {}
+    cogzyme_data['name'] = cogzyme.name
+    cogzyme_short_name = cogzyme.name
+    if len(cogzyme.name) > 22:
+        cogzyme_short_name = cogzyme.name[:18] + " ..."
+    
+    request.session['cogzyme_short_name'] = cogzyme_short_name
+    
+    enzyme_list_for_cogzyme = Enzyme.objects.filter(cogzyme=cogzyme)\
+        .values('name', 'source__name')
+    cogzyme_data['enzymes'] = enzyme_list_for_cogzyme
+    
+    cog_list_for_cogzyme = Cog.objects.filter(cogzyme=cogzyme)\
+        .values_list('name', flat=True)
+    cogzyme_data['cogs'] = cog_list_for_cogzyme
+    
+    model_rxns_data = Model_reaction.objects\
+        .filter(cog_enzymes__cogzyme=cogzyme)\
+        .annotate(equiv_count=Count('mapping__model_reaction'))\
+        .values('model_id','name','gpr','db_reaction__name','equiv_count')
+    
+    
+    return render_to_response('cogzyme.html', {
+        'model_rxns_data': model_rxns_data,
+        'cogzyme_data': cogzyme_data,
+        'model_specified': model_specified,
+        'cog_specified': cog_specified,
+        'cogzyme_specified': cogzyme_specified,
+        'cogzyme_short_name': cogzyme_short_name
+    })
+
+
+
+
+
+def cog(request, cog_specified = None):
+    
+    model_specified = request.session.get('model_specified')
+    cogzyme_specified = request.session.get('cogzyme_specified')
+    cogzyme_short_name = request.session.get('cogzyme_short_name')
+    
+    return render_to_response('cog.html', {
+        'model_specified': model_specified,
+        'cog_specified': cog_specified,
+        'cogzyme_specified': cogzyme_specified,
+        'cogzyme_short_name': cogzyme_short_name
+    })
