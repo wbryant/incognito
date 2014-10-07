@@ -1,142 +1,90 @@
-<!DOCTYPE html>
-<html lang="en">
-    <head>
+{% extends "base.html" %}
+
+{% block model %} focus selected {% endblock %}
+
+{% block data %}
+<section id="model_summary"> Model {{ model_specified }} has been found. </section>
         
-        {% load staticfiles %}
-        
-        <meta charset="utf-8">
+<section id="tabs">
+    <nav id="tab_menu" class="horizontal_menu">
+        <a href="#tab-1">Model Reactions</a>
+        <a href="#tab-2">Predicted Reactions</a>
+        <a href="#tab-3">Summary</a>
+    </nav>
+    
+    <p class="loader">loading ...</p>
+    
+    <div class="tab" id="tab-1">
+        <table id="model_reactions" class="display datatable">
+            <thead><tr>
+                <td>ID (from model)</td>
+                <td>Name</td>        
+                <td>MNX Reaction</td>        
+                <td>Equivalents</td>        
+                <td>GPR</td>        
+            </tr></thead>
+            <tbody>
+            {% for rxn in model_rxns_data %}
+                <tr>
+                    <td>{{ rxn.model_id }}</td>
+                    <td>{{ rxn.name }}</td>        
+                    <td>{{ rxn.db_reaction__name }}</td>        
+                    <td>{{ rxn.equiv_count }}</td>        
+                    <td>{{ rxn.gpr }}</td>        
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>   
+    </div>
+    
+    <div class="tab" id="tab-2">
+        <table id="predictions" class="display datatable">
+            <thead><tr>
+                <td>ID (X-ref)</td>
+                <td>Name</td>        
+                <td>Source</td>        
+                <td>Cogzyme</td>        
+                <td>Enzyme Constituents</td>        
+            </tr></thead>
+            <tbody>
+            {% for pred in prediction_data %}
+                <tr>
+                    <td>{{ pred.reaction__mapping__name }}</td>
+                    <td>{{ pred.reaction__name }}</td>        
+                    <td>{{ pred.ref_model__name }}</td>        
+                    <td>{{ pred.cogzyme__name }}</td>
+                    <td>
+                        {% for cog_locus in pred.cog_locus_list %}
+                            {{ cog_locus.0 }}: {{ cog_locus.1 }} <br/>
+                        {% endfor %}
+                    </td>       
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>  
+    </div>
 
-        <!-- Always force latest IE rendering engine (even in intranet) & Chrome Frame
-        Remove this if you use the .htaccess -->
-        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-
-        <title>InCOGnito</title>
-        <meta name="description" content="">
-        <meta name="author" content="Will Bryant">
-
-        <meta name="viewport" content="width=device-width; initial-scale=1.0">
-
-        <style type="text/css" title="currentStyle">
-            @import "{% static "css/incognito.css" %}";
-            @import "{% static "css/jquery.dataTables.css" %}";
-        </style>
-        
-        <script type="text/javascript" src="{% static "js/jquery.js" %}"></script>
-        <script type="text/javascript" src="{% static "js/jquery.dataTables.js" %}"></script>
-        <script src="{% static "js/incognito.js" %}"></script>
-    </head>
-
-    <body id="model_body">
-
-        <header>
-            <h1 id="title">InCOGnito</h1>
-        
-            <nav id="top_menu" class="horizontal_menu">
-                <a class="home" href="/home">Home</a>
-                <a class="model focus selected" href="/model{% if model_specified != None %}/id:{{ model_specified }}{% endif %}">Model{% if model_specified != None %}: {{ model_specified }} {% endif %}</a>
-            </nav>
-        </header>
-        
-        <section id="model_summary"> Model {{ model_specified }} has been found. </section>
-        
-        <section id="tabs">
-            <nav id="tab_menu" class="horizontal_menu">
-                <a href="#tab-1">Model Reactions</a>
-                <a href="#tab-2">Predicted Reactions</a>
-                <a href="#tab-3">Summary</a>
-            </nav>
-            
-            <p class="loader">loading ...</p>
-            
-            <div class="tab" id="tab-1">
-                <table id="model_reactions" class="display datatable">
-                    <thead><tr>
-                        <td>ID (from model)</td>
-                        <td>Name</td>        
-                        <td>MNX Reaction</td>        
-                        <td>Equivalents</td>        
-                        <td>GPR</td>        
-                    </tr></thead>
-                    <tbody>
-                    {% for rxn in model_rxns_data %}
-                        <tr>
-                            <td>{{ rxn.model_id }}</td>
-                            <td>{{ rxn.name }}</td>        
-                            <td>{{ rxn.db_reaction__name }}</td>        
-                            <td>{{ rxn.equiv_count }}</td>        
-                            <td>{{ rxn.gpr }}</td>        
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>   
-            </div>
-            
-            <div class="tab" id="tab-2">
-                <table id="predictions" class="display datatable">
-                    <thead><tr>
-                        <td>ID (X-ref)</td>
-                        <td>Name</td>        
-                        <td>Source</td>        
-                        <td>Cogzyme</td>        
-                        <td>Enzyme Constituents</td>        
-                    </tr></thead>
-                    <tbody>
-                    {% for pred in prediction_data %}
-                        <tr>
-                            <td>{{ pred.reaction__mapping__name }}</td>
-                            <td>{{ pred.reaction__name }}</td>        
-                            <td>{{ pred.ref_model__name }}</td>        
-                            <td>{{ pred.cogzyme__name }}</td>
-                            <td>
-                                {% for cog_locus in pred.cog_locus_list %}
-                                    {{ cog_locus.0 }}: {{ cog_locus.1 }} <br/>
-                                {% endfor %}
-                            </td>       
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>  
-            </div>
-
-            <div class="tab" id="tab-3">
-                
-                <p>Number of predictions: {{ summary.num_preds }}</p>
-                
-                <p>Number distinct adds: {{ summary.num_adds }}</p>
-                
-                <p>Number distinct rems: {{ summary.num_rems }}</p>
-                
-                
-                
-                <table id="summary" class="display">
-                    <thead><tr>
-                        <td>Reference Model</td>
-                        <td>Number of additions</td>        
-                        <td>Number of removals</td>                
-                    </tr></thead>
-                    <tbody>
-                    {% for model in summary.ref_model_list %}
-                        <tr>
-                            <td>{{ model.0 }}</td>
-                            <td>{{ model.1 }}</td>        
-                            <td>{{ model.2 }}</td>        
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>   
-                
-                
-                
-            </div>
- 
-            
-        </section>
-
-        <footer>
-            <p>
-                &copy; Copyright Will Bryant
-            </p>
-        </footer>
-        
-    </body>
-</html>
+    <div class="tab" id="tab-3">
+        <p>Number of predictions: {{ summary.num_preds }}</p>
+        <p>Number distinct adds: {{ summary.num_adds }}</p>
+        <p>Number distinct rems: {{ summary.num_rems }}</p>
+        <table id="summary" class="display">
+            <thead><tr>
+                <td>Reference Model</td>
+                <td>Number of additions</td>        
+                <td>Number of removals</td>                
+            </tr></thead>
+            <tbody>
+            {% for model in summary.ref_model_list %}
+                <tr>
+                    <td>{{ model.0 }}</td>
+                    <td>{{ model.1 }}</td>        
+                    <td>{{ model.2 }}</td>        
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>       
+    </div> 
+    
+</section>
+{% endblock %}
