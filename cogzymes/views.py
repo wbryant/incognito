@@ -242,9 +242,34 @@ def cog(request, cog_specified = None):
     cogzyme_specified = request.session.get('cogzyme_specified')
     cogzyme_short_name = request.session.get('cogzyme_short_name')
     
+    ## Determine whether COG is already specified
+    if not cog_specified:
+        ## Is cog already specified?
+        cog_specified = request.session.get('cog_specified')
+        if not cog_specified:
+            render_to_response('cog_unselected.html')
+    
+    ## Is specified value valid?
+    try:
+        cog = Cog.objects.get(name=cog_specified)
+        request.session['cog_specified'] = cog_specified
+    except:
+        return render_to_response('cog_not_found.html', {'cog_specified': cog_specified})    
+    
+    cogzyme_table = Cogzyme.objects\
+        .filter(cogs=cog)\
+        .values('name')
+    
+    gene_table = Gene.objects\
+        .filter(cogs=cog, organism__source__isnull = False)\
+        .values('locus_tag','organism__taxonomy_id')
+        
+    
     return render_to_response('cog.html', {
         'model_specified': model_specified,
         'cog_specified': cog_specified,
         'cogzyme_specified': cogzyme_specified,
-        'cogzyme_short_name': cogzyme_short_name
+        'cogzyme_short_name': cogzyme_short_name,
+        'cogzyme_table': cogzyme_table,
+        'gene_table': gene_table
     })

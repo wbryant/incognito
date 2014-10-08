@@ -5,16 +5,16 @@
 {% block data %}
 <section id="cogzyme_summary"> COGzyme "{{ cogzyme_specified }}" has been found. </section>
 
+<p>COGS:</p>
 <section id="cogzyme_cogs">
-    <p>COGS:</p>
     <p>
         {% for cog_name in cogzyme_data.cogs %}
-        <a href="/cog/id:{{ cog_name }}">{{ cog_name }}</a>, 
+            <a href="/cog/id:{{ cog_name }}">{{ cog_name }}</a>{% if not forloop.last %}, {% endif %} 
         {% endfor %}
     </p>
-    
-    <p>Model Reactions:</p>
-    
+</section>
+
+   
 <section id="tabs">
     <nav id="tab_menu" class="horizontal_menu">
         <a href="#tab-1">Enzymes</a>

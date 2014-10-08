@@ -1,3 +1,47 @@
 {% extends "base.html" %}
 
 {% block cog %} focus selected {% endblock %}
+
+{% block data %}
+<section id="tabs">
+    <nav id="tab_menu" class="horizontal_menu">
+        <a href="#tab-1">COGzymes</a>
+        <a href="#tab-2">Genes in DB Models</a>
+    </nav>
+    
+    <p class="loader">loading ...</p>
+    
+    <div class="tab" id="tab-1">
+        <table id="cogzymes" class="display datatable">
+            <thead><tr>
+                <td>Name</td>
+            </tr></thead>
+            <tbody>
+            {% for cz in cogzyme_table %}
+                <tr>
+                    <td><a href="/cogzyme/id:{{ cz.name }}">{{ cz.name }}</a></td>               
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>  
+    </div>
+
+    <div class="tab" id="tab-2">
+        <table id="genes" class="display datatable">
+            <thead><tr>
+                <td>Locus Tag</td>
+                <td>Taxonomy ID</td>              
+            </tr></thead>
+            <tbody>
+            {% for gene in gene_table %}
+                <tr>
+                    <td>{{ gene.locus_tag }}</td>
+                    <td>{{ gene.organism__taxonomy_id }}</td>                
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>   
+    </div>
+       
+</section>
+{% endblock %}
