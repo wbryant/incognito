@@ -15,7 +15,7 @@ def create_cog_type_dict(source):
     for cog in Cog.objects.filter(gene__organism=source.organism).distinct():
         organism_cogs.append(cog)
         
-    for cog in Cog.objects.filter(cogzyme__enzymes__source=source).distinct():
+    for cog in Cog.objects.filter(cogzyme__cog_enzymes__source=source).distinct():
         model_cogs.append(cog)
         
     for cog in organism_cogs:
@@ -135,7 +135,7 @@ class Command(BaseCommand):
         
         ## For each cogzyme in the ref_model, can the dev_genome make it?
         
-        for ref_cogzyme in Cogzyme.objects.filter(enzymes__source__in=ref_sources).distinct():
+        for ref_cogzyme in Cogzyme.objects.filter(cog_enzymes__source__in=ref_sources).distinct():
             
             ref_cogzyme_type = cogzyme_in_model(ref_cogzyme, dev_cog_types)
             
@@ -144,7 +144,7 @@ class Command(BaseCommand):
             if ref_cogzyme_type == 'model':
                 ## cogzyme possible with genes already in the model
                 
-                if ref_cogzyme.enzymes.filter(source=dev_source):
+                if ref_cogzyme.cog_enzymes.filter(source=dev_source):
                     ## Already in model - KNOWN
         
                     for ref_source in ref_sources:

@@ -1,8 +1,11 @@
 from django.core.management.base import BaseCommand, CommandError
-from annotation.models import Reaction, Stoichiometry, Metabolite, Compartment, Metabolite_synonym
+from annotation.models import Reaction, Stoichiometry, Metabolite, Compartment, Metabolite_synonym, Source
+from cogzymes.models import Reaction_pred
 import sys, os, re
 from myutils.general.utils import loop_counter, dict_append
+from myutils.django.cogzymes_utils import get_gpr_from_reaction
 from libsbml import SBMLDocument, writeSBMLToFile, SBMLReader
+from collections import Counter
 
 # Example species reference: '<speciesReference species="M_h_c" stoichiometry="1"/>'
 
@@ -511,6 +514,7 @@ class Command(BaseCommand):
         """ 
         
         model_file_in = '/Users/wbryant/work/BTH/data/iAH991/BTH_with_gprs.xml'
+        dev_model = Source.objects.get(name='iAH991')
         
         try:
             model_file_out = args[0]
@@ -530,9 +534,40 @@ class Command(BaseCommand):
         ## Cogzyme predictions
         rxn_gene_list += list(Reaction.objects.filter(cogzyme_prediction__isnull = False)\
                               .values_list('name','cogzyme_prediction__gpr'))
- 
+        
+        
+        ## InCOGnito predictions - limit by minimum number of models predicting
+        num_models_cutoff = 3
+
+        pred_counts = Counter(zip(*list(
+            Reaction_pred.objects
+            .filter(dev_model=dev_model, status='add')
+            .values_list('reaction__db_reaction__name','ref_model__name')
+            .distinct()
+        ))[0])
+        
+        pred_list = []
+        for rxn in pred_counts:
+            if pred_counts[rxn] >= num_models_cutoff:
+                pred_list.append(rxn)
+        
+        ### Find GPR for predictions
+        ## for each predicted reaction
+        incognito_rxn_gene_list = []
+        for rxn in pred_list:
+            reaction = Reaction.objects.get(name=rxn)
+            gpr = get_gpr_from_reaction(dev_model, reaction)
+            incognito_rxn_gene_list.append((rxn, gpr))
+            print (rxn, gpr)
+        rxn_gene_list += incognito_rxn_gene_list
+        
         
         ## Run converter for selected reactions
         convert_db_rxns_to_sbml(rxn_gene_list, model_file_in, model_file_out)
+        
+        
+        
+        
+        
         
         
