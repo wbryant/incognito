@@ -7,11 +7,13 @@ Created on 11 Mar 2014
 from django.db.models import Count, F, Q, Avg, Max
 
 import sys, os
-sys.path.append("/Users/wbryant/work/BTH/incognito")
-sys.path.append("/Users/wbryant/work/BTH/incognito/annotation")
+#sys.path.append("/Users/wbryant/work/BTH/incognito")
+#sys.path.append("/Users/wbryant/work/BTH/incognito/annotation")
 os.environ["DJANGO_SETTINGS_MODULE"] = "config.settings"
 #from annotation.models import Reaction, Metabolite, Stoichiometry
 # from annotation.models import Reaction, Metabolite, Stoichiometry, Model_reaction
+
+from annotation.models import Model_reaction
 
 # def find_reaction_overlaps(in_reaction, source = None):
 #     """
@@ -89,7 +91,15 @@ def find_model_crossover_reactions(model1_source_name, model2_source_name, Model
             m1_name = entry
             m2_name = mnx_model2_dict[mnx1]
             print("{}\t{}".format(m1_name,m2_name))
-    
+
+
+# def get_model_rxn_from_db_rxn(db_reaction, dev_model):
+#     """
+#         From a DB reaction or DB reaction name, find the corresponding reaction
+#         in a particular model, return empty if none or more than one model 
+#         reactions are found. 
+#     """
+#     
 
 
           

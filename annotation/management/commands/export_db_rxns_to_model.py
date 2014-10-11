@@ -1,11 +1,12 @@
 from django.core.management.base import BaseCommand, CommandError
-from annotation.models import Reaction, Stoichiometry, Metabolite, Compartment, Metabolite_synonym, Source
+from annotation.models import Reaction, Stoichiometry, Metabolite, Compartment, Metabolite_synonym, Source, Model_reaction
 from cogzymes.models import Reaction_pred
 import sys, os, re
 from myutils.general.utils import loop_counter, dict_append
 from myutils.django.cogzymes_utils import get_gpr_from_reaction
 from libsbml import SBMLDocument, writeSBMLToFile, SBMLReader
 from collections import Counter
+from copy import deepcopy
 
 # Example species reference: '<speciesReference species="M_h_c" stoichiometry="1"/>'
 
@@ -314,6 +315,64 @@ def create_species_xml(species_declaration_list, model_file = '/Users/wbryant/wo
 
     return species_declaration_string, model_metabolite_ids
 
+def stop_db_rxns_in_sbml(
+        db_rxn_list,
+        dev_model, 
+        model_file_in = '/Users/wbryant/work/BTH/analysis/working_models/scratch_model.xml',
+        model_file_out = '/Users/wbryant/work/BTH/analysis/working_models/scratch_model_rem.xml'):
+    """Take a list of DB reactions and set the associated model reaction bounds to 0. 
+    """
+    
+    
+    
+    ## Find relevant model reaction IDs
+    removal_model_rxn_ids = []
+    for db_rxn in db_rxn_list:
+        try:
+            model_rxn_id = Model_reaction.objects.get(db_reaction=db_rxn, source=dev_model).model_id
+        except:
+            try:
+                model_rxn_id = Model_reaction.objects.get(db_reaction__name=db_rxn, source=dev_model).model_id
+            except:
+                print db_rxn
+                continue
+        removal_model_rxn_ids.append(model_rxn_id)
+    
+    
+    
+    f_in = open(model_file_in,'r')
+    f_out = open(model_file_out,'w')         
+    
+    ## Run through each line, finding the relevant IDs and when found change the upper and lower bound values to 0
+    removed_reactions = []
+    for line in f_in:
+        f_out.write(line)
+        search_results = re.search('reaction[_\s]*id=\"(?P<rxn_id>[^\"]+)\"',line)
+        if search_results:
+            model_rxn_id = search_results.group('rxn_id')
+            if model_rxn_id in removal_model_rxn_ids:
+                for line in f_in:
+                    line_out = deepcopy(line)
+                    if ('id="LOWER_BOUND"' in line) or ('id="UPPER_BOUND"' in line):
+                        line_out = re.sub('value=\"[\-0-9]+\"','value="0"',line)
+                        removed_reactions.append(model_rxn_id)
+                    f_out.write(line_out)
+                    if '</reaction>' in line:
+                        break
+    
+    removed_reactions = set(removed_reactions)
+    removal_model_rxn_ids = set(removal_model_rxn_ids)
+    unremoved_reactions = list(removal_model_rxn_ids - removed_reactions)
+    removed_reactions = list(removed_reactions)
+    
+#     print("Removed reactions:\n")
+#     print removed_reactions
+#     print("\nUnremoved reactions:\n")
+#     print unremoved_reactions
+    
+    
+    
+    
 def convert_db_rxns_to_sbml(rxn_gene_list, 
                             model_file_in = '/Users/wbryant/work/BTH/data/iAH991/BTH_with_gprs.xml', 
                             model_file_out = '/Users/wbryant/work/BTH/analysis/working_models/scratch_model.xml'):
@@ -530,27 +589,27 @@ class Command(BaseCommand):
 #         ## Profunc predictions
 #         rxn_gene_list += list(Reaction.objects.filter(profunc_prediction__total_score__gte = 0.05)\
 #                             .values_list('name','profunc_prediction__gene__locus_tag'))
-        
-        ## Cogzyme predictions
-        rxn_gene_list += list(Reaction.objects.filter(cogzyme_prediction__isnull = False)\
-                              .values_list('name','cogzyme_prediction__gpr'))
-        
-        
+#         
+#         ## Cogzyme predictions
+#         rxn_gene_list += list(Reaction.objects.filter(cogzyme_prediction__isnull = False)\
+#                               .values_list('name','cogzyme_prediction__gpr'))
+         
+         
         ## InCOGnito predictions - limit by minimum number of models predicting
         num_models_cutoff = 3
-
+ 
         pred_counts = Counter(zip(*list(
             Reaction_pred.objects
             .filter(dev_model=dev_model, status='add')
             .values_list('reaction__db_reaction__name','ref_model__name')
             .distinct()
         ))[0])
-        
+         
         pred_list = []
         for rxn in pred_counts:
             if pred_counts[rxn] >= num_models_cutoff:
                 pred_list.append(rxn)
-        
+         
         ### Find GPR for predictions
         ## for each predicted reaction
         incognito_rxn_gene_list = []
@@ -558,16 +617,22 @@ class Command(BaseCommand):
             reaction = Reaction.objects.get(name=rxn)
             gpr = get_gpr_from_reaction(dev_model, reaction)
             incognito_rxn_gene_list.append((rxn, gpr))
-            print (rxn, gpr)
+#             print (rxn, gpr)
         rxn_gene_list += incognito_rxn_gene_list
-        
-        
+         
+         
         ## Run converter for selected reactions
         convert_db_rxns_to_sbml(rxn_gene_list, model_file_in, model_file_out)
         
+        ## Find removal predictions and set relevant upper and lower bounds to 0 
         
+        removal_reaction_list = list(Reaction_pred.objects.filter(
+            dev_model=dev_model,
+            status='rem')\
+            .values_list('reaction__db_reaction__name', flat=True)\
+            .distinct())
         
-        
+        stop_db_rxns_in_sbml(removal_reaction_list, dev_model)
         
         
         
