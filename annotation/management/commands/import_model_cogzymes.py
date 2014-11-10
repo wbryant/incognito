@@ -188,7 +188,37 @@ def map_reaction_metprints(source_name):
 #             ))
     
     print("    {} model reactions mapped to DB reactions using metprints.\n".format(num_mapped)) 
+
+def simple_metabolite_mapping(syn_dbmet_dict, model_met, core_id = None):
     
+    map_status = False
+    dup_mappings = []
+    
+    if core_id:
+        test_id = core_id.lower()
+        
+#         dbmets = Metabolite.objects.filter(metabolite_synonym__synonym=test_id).distinct()
+        
+        if test_id in syn_dbmet_dict:
+            dbmet = syn_dbmet_dict[test_id]
+            model_met.db_metabolite = dbmet
+            model_met.save()
+            map_status = True
+        else:
+            ## try to map by metabolite name
+            
+            met_name = model_met.name.lower()
+            
+            if met_name in syn_dbmet_dict:
+                dbmet = syn_dbmet_dict[met_name]
+                model_met.db_metabolite = dbmet
+                model_met.save()
+                map_status = True
+             
+    return model_met, map_status, dup_mappings
+    
+    
+
 def maps_to_db_met(syn_met_dict, model_met, core_id = None):
     """
     If unambiguous DB metabolite can be found for model metabolite, add link in model_metabolite entry.
@@ -309,6 +339,8 @@ class Command(BaseCommand):
             model_file_in = '/Users/wbryant/work/cogzymes/models/ECO_iJO1366.xml'
             print("Using default model.")
         
+        add_cogzymes = False
+        ref_status = False
         if len(args) >= 2:
             
             arg_options = args[1:]
@@ -316,13 +348,9 @@ class Command(BaseCommand):
             if 'add_cogzymes' in arg_options:
                 add_cogzymes = True
                 print("Import will include cogzyme analysis.")
-            else:
-                add_cogzymes = False
             
             if 'ref' in arg_options:
                 ref_status = True
-            else:
-                ref_status = False
 
 
         ## Import model data using NetworkX
@@ -516,7 +544,8 @@ class Command(BaseCommand):
                 
                 ## Can the metabolite be unambiguously mapped to the DB?
                 
-                met, map_status, dup_mappings = maps_to_db_met(synonym_db_met_dict,met, model_id)
+#                 met, map_status, dup_mappings = maps_to_db_met(synonym_db_met_dict,met, model_id)
+                met, map_status, dup_mappings = simple_metabolite_mapping(synonym_db_met_dict, met, model_id)
                 for dup_mapping in dup_mappings:
                     dict_append(dup_mappings_dict, dup_mapping.id, node['id'])        
                 if map_status == False:
@@ -657,7 +686,7 @@ class Command(BaseCommand):
                                 
                                 name_cogzyme_dict[cogzyme_name] = cogzyme
                                 
-                            cogzyme.enzymes.add(enzyme)
+                            cogzyme.cog_enzymes.add(enzyme)
                 
         counter.stop()
         
