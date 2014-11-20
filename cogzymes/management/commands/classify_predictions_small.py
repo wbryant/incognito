@@ -180,6 +180,80 @@ def get_valid_preds(ref_model, dev_model = None):
     
     return ref_not_dev, dev_rxns, ref_rxns, dev_not_ref
 
+
+def classify_preds(dev_model):
+    
+    max_cz_reactions = 8
+    min_mets_mapped = 0.5
+    min_num_models = 3
+    
+    ## Get all predictions
+    dbrxn_predictions = Reaction.objects.filter(
+        model_reaction__reaction_pred__dev_model=dev_model,
+    ).distinct()
+    
+    ## Create dict for binary classifications of all predicted reactions
+    rxn_class = {}
+    for rxn in dbrxn_predictions:
+        rxn_class[rxn.id] = []
+    
+    ## Count num models for each prediction
+    pred_counts = Counter(zip(*list(
+            Reaction_pred.objects
+            .filter(dev_model=dev_model, status='add')
+            .values_list('reaction__db_reaction__name','ref_model__name')
+            .distinct()
+        ))[0])
+    
+    ## for each pred_rxn/cogzyme pair
+    valid_predictions = []
+    for dbrxn in dbrxn_predictions:
+        ### Test number of mapped mets
+        
+        num_mets = dbrxn.stoichiometry_set.all().count()
+        num_mets_mapped = dbrxn.stoichiometry_set.filter(metabolite__model_metabolite__source=dev_model).distinct().count()
+        mapped_proportion = float(num_mets_mapped)/num_mets
+        if mapped_proportion < min_mets_mapped:
+            continue
+        
+        ###! test number of models predicting
+        
+        if pred_counts[dbrxn.name] < min_num_models:
+            continue
+        
+        ###! test cogzyme specificity
+        
+        pred_cogzymes = Cogzyme.objects.filter(
+            reaction_pred__dev_model=dev_model,
+            reaction_pred__reaction=dbrxn
+            )\
+            .distinct()
+        
+        cz_specific = []
+        for cogzyme in pred_cogzymes:
+            num_rxns = Reaction.objects\
+                .filter(model_reaction__cog_enzymes__cogzyme=cogzyme)\
+                .distinct()\
+                .count()
+            
+            if num_rxns <= max_cz_reactions:
+                cz_specific.append(cogzyme)
+        
+        if len(cz_specific) == 0:
+            continue
+        
+        for cz in cz_specific:
+            valid_predictions.append([dbrxn, cz])
+            
+    return valid_predictions
+    
+    ## return all DB reactions for those IDs?  How is the model export done? Check
+    
+
+
+    
+
+
 class Command(BaseCommand):
     
     help = 'Validate predictions for a particular development model.'
