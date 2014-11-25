@@ -2,14 +2,14 @@ from myutils.general.utils import loop_counter
 from django.db.models.loading import get_model
 import sys
 
-def get_model_dictionary(Model, key_columns):
+def get_model_dictionary(Model, key_columns, db = 'default'):
     """
     Create a dictionary of model entries, with key_columns as key.
     """
     
 #     Model = get_model(app_name, model_name)
     
-    models = Model.objects.all()
+    models = Model.objects.using(db).all()
     
     model_dict = {}
     

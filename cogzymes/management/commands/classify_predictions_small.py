@@ -185,17 +185,19 @@ def classify_preds(dev_model):
     
     max_cz_reactions = 8
     min_mets_mapped = 0.5
-    min_num_models = 3
+    min_num_models = 2
     
     ## Get all predictions
     dbrxn_predictions = Reaction.objects.filter(
         model_reaction__reaction_pred__dev_model=dev_model,
     ).distinct()
+    print("{} dbreaction predictions.".format(dbrxn_predictions.count()))
     
-    ## Create dict for binary classifications of all predicted reactions
-    rxn_class = {}
-    for rxn in dbrxn_predictions:
-        rxn_class[rxn.id] = []
+    
+#     ## Create dict for binary classifications of all predicted reactions
+#     rxn_class = {}
+#     for rxn in dbrxn_predictions:
+#         rxn_class[rxn.id] = []
     
     ## Count num models for each prediction
     pred_counts = Counter(zip(*list(
@@ -204,6 +206,11 @@ def classify_preds(dev_model):
             .values_list('reaction__db_reaction__name','ref_model__name')
             .distinct()
         ))[0])
+    print("{} distinct dbreactions predicted.".format(len(pred_counts)))
+    
+    num_mapped_ok = 0
+    num_pred_count_ok = 0
+    num_cz_specificity_ok = 0
     
     ## for each pred_rxn/cogzyme pair
     valid_predictions = []
@@ -216,16 +223,20 @@ def classify_preds(dev_model):
         if mapped_proportion < min_mets_mapped:
             continue
         
+        num_mapped_ok += 1
+        
         ###! test number of models predicting
         
         if pred_counts[dbrxn.name] < min_num_models:
             continue
         
+        num_pred_count_ok += 1
+        
         ###! test cogzyme specificity
         
         pred_cogzymes = Cogzyme.objects.filter(
             reaction_pred__dev_model=dev_model,
-            reaction_pred__reaction=dbrxn
+            reaction_pred__reaction__db_reaction=dbrxn
             )\
             .distinct()
         
@@ -242,18 +253,102 @@ def classify_preds(dev_model):
         if len(cz_specific) == 0:
             continue
         
+        num_cz_specificity_ok += 1
+        
         for cz in cz_specific:
             valid_predictions.append([dbrxn, cz])
-            
+    
+    print("{}\t{}\t{}".format(num_mapped_ok, num_pred_count_ok, num_cz_specificity_ok))
+    
     return valid_predictions
     
-    ## return all DB reactions for those IDs?  How is the model export done? Check
     
-
-
+def infer_rxn_enz_pairs_from_preds(dev_model):
+    """For each valid prediction from 'classify_preds' multiply out possible 
+    reaction/enzyme instance pairs."""
     
+    max_enzymes = 20
+    valid_preds = classify_preds(dev_model)
+    
+    rxn_enz_tuples = []
+    for pred in valid_preds:
+        dbrxn = pred[0]
+        cz = pred[1]
+        
+        
+        locus_cog_data = Gene.objects\
+            .filter(
+                organism__source=dev_model,
+                cogs__cogzyme=cz)\
+            .values('locus_tag','cogs__name')
+        cog_locus_dict = {}
+        for locus_cog in locus_cog_data:
+            dict_append(cog_locus_dict,locus_cog['cogs__name'],locus_cog['locus_tag'])
+        
+        
+        cog_locus_lists = []
+        for _, locus_list in cog_locus_dict.items():
+            cog_locus_lists.append(locus_list)
+            
+        enzyme_list = [list(genes) for genes in product(*cog_locus_lists)]
+        
+        if len(enzyme_list) <= max_enzymes:
+            for enzyme in enzyme_list:
+                enzyme.sort()
+                gpr_string = "( "
+                gpr_string += " and ".join(enzyme)
+                gpr_string += " )"
+                rxn_enz_tuples.append((dbrxn, gpr_string))
+    
+    rxn_enz_tuples = find_preds_valid_transport(rxn_enz_tuples)
+    
+    print("There are {} valid rxn/enz predictions.".format(len(rxn_enz_tuples)))
+    
+    return rxn_enz_tuples
 
 
+def find_preds_valid_transport(rxn_enz_tuples):
+    """remove any rxn/enz pairs from rxn_enz_tuples if the reaction has the same metabolite[comp] on both sides - an uncomped transporter
+    """
+    rxn_enz_valid = []
+    for rxn_enz in rxn_enz_tuples:
+        stoichiometry = Stoichiometry.objects.filter(reaction=rxn_enz[0])
+        
+        sub_list = []
+        pro_list = []
+        
+        
+        for met_sto in stoichiometry:
+            valid_rxn = True
+            met = met_sto.metabolite
+            
+                    ## Get metabolite compartment 
+            try:
+                cpt = met_sto.compartment.values_list('id', flat=True)
+            except:
+                cpt = '' 
+            if cpt == 'MNXC2':
+                cpt = 'e'
+            else:
+                cpt = 'c'
+            
+            if met_sto.stoichiometry < 0:
+                sub_list.append((met, cpt))
+            elif met_sto.stoichiometry > 0:
+                pro_list.append((met, cpt))
+            else:
+                valid_rxn = False
+            
+        if valid_rxn:
+            if len(set(sub_list) & set(pro_list)) > 0:
+                valid_rxn = False
+        
+        if valid_rxn:
+            rxn_enz_valid.append(rxn_enz)
+    
+    return rxn_enz_valid
+            
+            
 class Command(BaseCommand):
     
     help = 'Validate predictions for a particular development model.'
