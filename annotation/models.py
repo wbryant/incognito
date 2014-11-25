@@ -83,7 +83,7 @@ class Reaction(models.Model):
                
         return subs_fset, prod_fset, complete
         
-    def equation(self):
+    def equation(self, show_compartment=True, db_source=None):
         """
         Return a string representing the full stoichiometry of the reaction.
         """
@@ -93,33 +93,79 @@ class Reaction(models.Model):
         prods_list = []
         unknowns_list = []
         
-        for sto in stos:
-            if sto.stoichiometry < 0:
-                subs_list.append(sto)
-            elif sto.stoichiometry > 0:
-                prods_list.append(sto)
-            else:
-                unknowns_list.append(sto)
-        
         sub_string = ""
-        
-        for sub in subs_list:
-            try:
-                compartment = sub.compartment.id
-            except:
-                compartment = "unk"
-            sub_string = sub_string + " + %1d %s[%s]" % (sub.stoichiometry*-1, sub.metabolite.name, compartment)
-        sub_string = sub_string[3:]
-        
         prod_string = ""
         
-        for prod in prods_list:
+        for sto in stos:
+            
+            if db_source:
+                try:
+                    reactant_name = Metabolite_synonym.objects.filter(metabolite=sto.metabolite, source__name=db_source)[0]
+                except:
+                    reactant_name = sto.metabolite.name
+            else:
+                reactant_name = sto.metabolite.name
+            
             try:
-                compartment = prod.compartment.id
+                compartment = sto.compartment.id
             except:
                 compartment = "unk"
-            prod_string = prod_string + " + %1d %s[%s]" % (prod.stoichiometry, prod.metabolite.name, compartment)
+            
+            sub = False
+            prod = False
+            
+            if sto.stoichiometry < 0:
+                sub = True
+                stoichiometry = -1*sto.stoichiometry
+                subs_list.append((reactant_name, sto))
+            elif sto.stoichiometry > 0:
+                prod = True
+                stoichiometry = sto.stoichiometry
+                prods_list.append((reactant_name, sto))
+            else:
+                unknowns_list.append(sto)
+            
+            reactant_string = " + %1d %s" % (stoichiometry, reactant_name)
+            if show_compartment:
+                reactant_string += "[%s]" % (compartment)
+            
+            if sub:
+                sub_string += reactant_string
+            elif prod:
+                prod_string += reactant_string
+            
+        sub_string = sub_string[3:]
         prod_string = prod_string[3:]
+        equation = sub_string + " = " + prod_string            
+            
+        
+#         sub_string = ""
+#         
+#         for reactant in subs_list:
+#             sub_name = reactant[0]
+#             sub = reactant[1]
+#             try:
+#                 compartment = sub.compartment.id
+#             except:
+#                 compartment = "unk"
+#             if no_compartment:
+#                 sub_string = sub_string + " + %1d %s" % (sub.stoichiometry*-1, sub.metabolite.name)
+#             else:
+#                 sub_string = sub_string + " + %1d %s[%s]" % (sub.stoichiometry*-1, sub.metabolite.name, compartment)
+#         sub_string = sub_string[3:]
+#         
+#         prod_string = ""
+#         
+#         for prod in prods_list:
+#             try:
+#                 compartment = prod.compartment.id
+#             except:
+#                 compartment = "unk"
+#             if no_compartment:
+#                 prod_string = prod_string + " + %1d %s" % (prod.stoichiometry, prod.metabolite.name)
+#             else:
+#                 prod_string = prod_string + " + %1d %s[%s]" % (prod.stoichiometry, prod.metabolite.name, compartment)
+#         prod_string = prod_string[3:]
         
         unknown_string = ""
         
@@ -131,9 +177,7 @@ class Reaction(models.Model):
             unknown_string = unknown_string + " + (unk) %s[%s]" % (unknown.metabolite.name, compartment)
         unknown_string = unknown_string[3:]
         
-        equation = sub_string + " ==> " + prod_string 
-        
-        if len(unknown_string) > 0:
+        if (len(unknown_string) > 0) & (show_compartment):
             equation = equation + " (%s)" % unknown_string
         
         return equation
