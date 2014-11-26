@@ -10,15 +10,18 @@ from django.db.models import Count, F, Q, Avg, Max
 
 import sys, os, re
 from collections import OrderedDict
+from myutils.django.utils import get_model_dictionary
 #sys.path.append("/Users/wbryant/work/BTH/incognito")
 #sys.path.append("/Users/wbryant/work/BTH/incognito/annotation")
 os.environ["DJANGO_SETTINGS_MODULE"] = "config.settings"
 #from annotation.models import Reaction, Metabolite, Stoichiometry
 # from annotation.models import Reaction, Metabolite, Stoichiometry, Model_reaction
 
-from annotation.models import Model_reaction
+from annotation.models import Model_reaction, Source
 from annotation.models import Reaction, Metabolite, Metabolite_synonym, Stoichiometry, Model_metabolite
 from collections import Counter
+from myutils.general.utils import loop_counter
+
 
 # def find_reaction_overlaps(in_reaction, source = None):
 #     """
@@ -337,7 +340,73 @@ def find_mets_in_tsv(file_in, model = 'iAH991', file_out = None):
     
     f_out.close()
             
+def add_kegg_ids_as_synonyms(in_file=None):
+    in_file = in_file or '/Users/wbryant/work/BTH/data/metanetx/chem_xref.csv'
     
+    print("Getting synonym list ...")
+    current_synonyms = set(Metabolite_synonym.objects.all().values_list('synonym', flat=True))
+    print("Creating mnx_id - metabolite dictionary ...")
+    mid_met_dict = get_model_dictionary(Metabolite, 'id')
+    print("Beginning file analysis ...")
+    
+    
+    source = Source.objects.get(name = 'kegg')
+    source_name='kegg'
+    
+    f_in = open(in_file, 'r')
+    
+    num_source = 0
+    for line in f_in:
+        if re.match(source_name + "\:",line):
+            num_source += 1
+    f_in.close()
+    f_in = open(in_file, 'r')
+    
+    print("Number of lines = {}".format(num_source))
+    
+#     counter = loop_counter(num_source, "{} lines finished".format(source_name))
+    
+    kegg_ids_checked = []
+    
+    line_no = 0
+    for line in f_in:
+        if not line.startswith("#"):
+            if re.match(source_name + "\:",line):
+                line_no += 1
+#                 counter.step()
+                kegg_id_entry = line.split("\t")[0].strip()
+                mnx_id = line.split("\t")[1].strip()
+                
+                kegg_id = kegg_id_entry.split(":")[1].strip()
+                
+                if re.match('[A-Z][0-9]{5}',kegg_id):
+#                     print kegg_id, mnx_id
+                    if kegg_id not in kegg_ids_checked:
+                        kegg_ids_checked.append(kegg_id)
+                    else:
+                        print("{} repeated in file ...".format(kegg_id))
+                    if kegg_id in current_synonyms:
+                        print(" - {} Already found ...".format(kegg_id))
+                    else:
+                        print("{}:\t{} being inputed ...".format(line_no, kegg_id))
+                        
+                        met = mid_met_dict[mnx_id]
+                        
+                        metsyn = Metabolite_synonym(
+                            metabolite=met,
+                            source=source,
+                            synonym=kegg_id
+                        )
+                        
+                        try:
+                            metsyn.save()
+                        except:
+                            print(" - Save failed for ID {} ...".format(kegg_id))
+                        
+    f_in.close()
+#     counter.stop()                
+                    
+                    
     
     
     

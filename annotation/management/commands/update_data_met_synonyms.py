@@ -25,7 +25,6 @@ class Command(BaseCommand):
         in_file = '/Users/wbryant/work/BTH/data/metanetx/chem_xref.csv'
         
         
-        
         f_in = open(in_file, 'r')
         
         ## Get complete list of synonyms

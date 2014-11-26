@@ -83,7 +83,7 @@ class Reaction(models.Model):
                
         return subs_fset, prod_fset, complete
         
-    def equation(self, show_compartment=True, db_source=None):
+    def equation(self, show_compartments=True, db_source=None):
         """
         Return a string representing the full stoichiometry of the reaction.
         """
@@ -100,12 +100,17 @@ class Reaction(models.Model):
             
             if db_source:
                 try:
-                    reactant_name = Metabolite_synonym.objects.filter(metabolite=sto.metabolite, source__name=db_source)[0]
+                    reactant = Metabolite_synonym.objects.get(metabolite=sto.metabolite, source__name=db_source, preferred=True)
+                    reactant_name = reactant.synonym
                 except:
-                    reactant_name = sto.metabolite.name
+                    try:
+                        reactant = Metabolite_synonym.objects.filter(metabolite=sto.metabolite, source__name=db_source)[0]
+                        reactant_name = reactant.synonym
+                    except:
+                        reactant_name = sto.metabolite.name
             else:
                 reactant_name = sto.metabolite.name
-            
+
             try:
                 compartment = sto.compartment.id
             except:
@@ -126,7 +131,7 @@ class Reaction(models.Model):
                 unknowns_list.append(sto)
             
             reactant_string = " + %1d %s" % (stoichiometry, reactant_name)
-            if show_compartment:
+            if show_compartments:
                 reactant_string += "[%s]" % (compartment)
             
             if sub:
@@ -177,7 +182,7 @@ class Reaction(models.Model):
             unknown_string = unknown_string + " + (unk) %s[%s]" % (unknown.metabolite.name, compartment)
         unknown_string = unknown_string[3:]
         
-        if (len(unknown_string) > 0) & (show_compartment):
+        if (len(unknown_string) > 0) & (show_compartments):
             equation = equation + " (%s)" % unknown_string
         
         return equation
@@ -222,6 +227,7 @@ class Reaction_synonym(models.Model):
     synonym = models.CharField(max_length=1000)
     inferred = models.BooleanField(default=False)
     reaction = models.ForeignKey(Reaction)
+    preferred = models.BooleanField(default=False)
     
     source = models.ForeignKey(Source)
 
@@ -519,6 +525,7 @@ class Metabolite_synonym(models.Model):
     inferred = models.BooleanField(default=False)
     metabolite = models.ForeignKey(Metabolite)
     source = models.ForeignKey(Source)
+    preferred = models.BooleanField(default=False)
     
     def __unicode__(self):
         return "%s: %s (%s)" % (self.synonym, self.metabolite.id, self.source.name)
