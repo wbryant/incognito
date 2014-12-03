@@ -28,8 +28,8 @@ reaction_string = u"""      <reaction id="{}" name="{}" reversible="true">
             <ci> FLUX_VALUE </ci>
           </math>
           <listOfParameters>
-            <parameter id="LOWER_BOUND" value="-1000" units="mmol_per_gDW_per_hr" constant="false"/>
-            <parameter id="UPPER_BOUND" value="1000" units="mmol_per_gDW_per_hr" constant="false"/>
+            <parameter id="LOWER_BOUND" value="{}" units="mmol_per_gDW_per_hr" constant="false"/>
+            <parameter id="UPPER_BOUND" value="{}" units="mmol_per_gDW_per_hr" constant="false"/>
             <parameter id="FLUX_VALUE" value="0" units="mmol_per_gDW_per_hr" constant="false"/>
             <parameter id="OBJECTIVE_COEFFICIENT" value="0" units="mmol_per_gDW_per_hr" constant="false"/>
           </listOfParameters>
@@ -153,9 +153,25 @@ def create_reaction_xml(reaction_gpr_tuple):
     for product in product_tuple_list:
         product_string += species_reference.format(*product)
     
+    ## Create bounds
+    upper_bound = 1000
+    lower_bound = -1000
+    if reaction.reversibility_eqbtr > 0:
+        lower_bound = 0
+    elif reaction.reversibility_eqbtr < 0:
+        upper_bound = 0
+    
     ## Create reaction string 
-    reaction_xml = reaction_string.format(reaction_id, reaction_name, reaction_source,\
-                                          gpr,substrate_string[:-1], product_string[:-1]) 
+    reaction_xml = reaction_string.format(
+        reaction_id,
+        reaction_name,
+        reaction_source,
+        gpr,
+        substrate_string[:-1],
+        product_string[:-1],
+        lower_bound,
+        upper_bound
+        ) 
       
     return reaction_xml, species_declaration_list
 

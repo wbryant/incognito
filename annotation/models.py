@@ -1,5 +1,5 @@
 from django.db import models
-import sys
+import sys, re
 
 class Source(models.Model):
     """Source for all information in the DB - in development!"""
@@ -50,6 +50,9 @@ class Reaction(models.Model):
     source = models.ForeignKey(Source)
     enzymes = models.ManyToManyField(Enzyme, through='Catalyst')
     balanced = models.BooleanField(default=True)
+    
+    ## Forward only = 1, Backward only = -1, reversible = 0
+    reversibility_eqbtr = models.IntegerField(default=0)
     unique_together = ("name","source")
     
     def __unicode__(self):
@@ -83,7 +86,7 @@ class Reaction(models.Model):
                
         return subs_fset, prod_fset, complete
         
-    def equation(self, show_compartments=True, db_source=None):
+    def equation(self, show_compartments=True, db_source=None, clean_for_eqbtr=False):
         """
         Return a string representing the full stoichiometry of the reaction.
         """
@@ -110,7 +113,14 @@ class Reaction(models.Model):
                         reactant_name = sto.metabolite.name
             else:
                 reactant_name = sto.metabolite.name
-
+            
+            if clean_for_eqbtr:
+#                 print reactant_name
+                reactant_name = re.sub('\s','-',reactant_name)
+#                 print reactant_name
+                reactant_name = re.sub('[^A-Za-z0-9_\(\),+\-]+','',reactant_name)
+#                 print reactant_name
+                
             try:
                 compartment = sto.compartment.id
             except:
@@ -118,6 +128,7 @@ class Reaction(models.Model):
             
             sub = False
             prod = False
+            unknown = False
             
             if sto.stoichiometry < 0:
                 sub = True
@@ -128,11 +139,13 @@ class Reaction(models.Model):
                 stoichiometry = sto.stoichiometry
                 prods_list.append((reactant_name, sto))
             else:
+                unknown = True
                 unknowns_list.append(sto)
             
-            reactant_string = " + %1d %s" % (stoichiometry, reactant_name)
-            if show_compartments:
-                reactant_string += "[%s]" % (compartment)
+            if not unknown:
+                reactant_string = " + %1d %s" % (stoichiometry, reactant_name)
+                if show_compartments:
+                    reactant_string += "[%s]" % (compartment)
             
             if sub:
                 sub_string += reactant_string

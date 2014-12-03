@@ -341,6 +341,8 @@ def find_mets_in_tsv(file_in, model = 'iAH991', file_out = None):
     f_out.close()
             
 def add_kegg_ids_as_synonyms(in_file=None):
+    """Get all IDs from KEGG in MetaNetX and add them to the synonym table."""
+    
     in_file = in_file or '/Users/wbryant/work/BTH/data/metanetx/chem_xref.csv'
     
     print("Getting synonym list ...")
@@ -406,6 +408,75 @@ def add_kegg_ids_as_synonyms(in_file=None):
     f_in.close()
 #     counter.stop()                
                     
+def test_reactions_with_eqbtr():
+    """For each reaction in the Reaction table, attempt to get a deltaGm to establish directionality."""
+    from gibbs.search_results_function import QueryResults
+    from time import time
+    
+    all_reactions = Reaction.objects.all()
+    
+    counter = loop_counter(all_reactions.count(), "Running through all reactions to establish reversibility")
+    
+    num_found = 0
+    num_reactions = 0
+    num_irrev_found = 0
+    num_irrev_forwards = 0
+    num_irrev_backwards = 0
+    num_reversible = 0
+    num_not_found = 0
+    t0 = time()
+    
+    
+    for dbrxn in all_reactions:
+        num_reactions += 1
+        counter.step()
+        equation = dbrxn.equation(db_source='kegg', show_compartments=False, clean_for_eqbtr=True)
+        
+        eqbrxn = QueryResults(equation)
+        
+        if eqbrxn:
+            num_found += 1
+            
+#             dG0 = eqbrxn.dg0_prime
+            dGm = eqbrxn.dgm_prime
+
+            ## Apply reversibility to DB
+            if dGm > 30:
+                num_irrev_backwards += 1
+#                 dbrxn.reversibility_eqbtr = -1
+            elif dGm < -30:
+#                 dbrxn.reversibility_eqbtr = 1
+                num_irrev_forwards += 1
+            else:
+                num_reversible += 1
+#             dbrxn.save()        
+            
+            if abs(dGm) > 30:
+                
+                num_irrev_found += 1
+#                 print("{}:\tdGm = {}".format(dbrxn.name, dGm))
+#                 print(" -> {}/{}".format(num_irrev_found, num_reactions))
+        else:
+            num_not_found += 1
+    
+    counter.stop()
+    
+    time_taken = time()-t0
+    print("Total reactions tested = {}".format(num_reactions))
+    print("Total found reversible = {}".format(num_reversible))
+    print("Total found irreversible forwards = {}".format(num_irrev_forwards))
+    print("Total found irreversible forwards = {}".format(num_irrev_backwards))
+    print("Total not found = {}".format(num_not_found))
+    print("Time taken = {} seconds.".format(time_taken))
+#     print("A total of {} irreversible reactions were found out of {} total reactions.".format(num_irrev_found, num_reactions))
+    
+    
+    
+    
+    
+    
+    
+
                     
     
     
