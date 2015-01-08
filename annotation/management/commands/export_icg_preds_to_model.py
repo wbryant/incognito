@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand, CommandError
 from annotation.models import Reaction, Stoichiometry, Metabolite, Compartment, Metabolite_synonym, Source, Model_reaction
 from cogzymes.models import Reaction_pred
 import sys, os, re
-from myutils.general.utils import loop_counter, dict_append
+from myutils.general.utils import loop_counter, dict_append, preview_dict
 from myutils.django.cogzymes_utils import get_gpr_from_reaction
 from libsbml import SBMLDocument, writeSBMLToFile, SBMLReader
 from collections import Counter
@@ -43,7 +43,7 @@ species_reference = u'          <speciesReference species="{}" stoichiometry="{}
 species_declaration = u'      <species id="{}" name="{}" compartment="{}" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false"></species>\n'
 
 def get_species_id_dict(model_file = '/Users/wbryant/work/BTH/data/iAH991/BTH_with_gprs.xml'):
-    """ Return a dictionary of species IDs from IDs and names from the input model."""
+    """ Return a dictionary of species IDs (excluding 'M_') from IDs and names from the input model."""
     
     reader = SBMLReader()
     document = reader.readSBMLFromFile(model_file)
@@ -88,15 +88,16 @@ def get_species_id_dict(model_file = '/Users/wbryant/work/BTH/data/iAH991/BTH_wi
 
 def create_reaction_xml(reaction_gpr_tuple):
     """ Return XML as close to SEED as possible, and species tuples."""
-    mnxr_id = reaction_gpr_tuple[0]
+    reaction = reaction_gpr_tuple[0]
     gpr = reaction_gpr_tuple[1]
     
-    ## Get relevant reaction data - ID and name
-    try:
-        reaction = Reaction.objects.get(name=mnxr_id)
-    except:
-        print("Single reaction not found ...")
-        sys.exit(1)
+#     ## Get relevant reaction data - ID and name
+#     try:
+#         reaction = Reaction.objects.get(name=mnxr_id)
+#     except:
+#         print type(mnxr_id)
+#         print("Single reaction not found for '{}' ('{}') ...".format(mnxr_id, gpr))
+#         sys.exit(1)
     
     reaction_id = reaction.name
     reaction_name = reaction.name
@@ -136,7 +137,7 @@ def create_reaction_xml(reaction_gpr_tuple):
         
         full_met_id = 'M_' + met_id + '_' + met_compartment
         
-        species_declaration_list.append((full_met_id, metabolite.name, met_compartment))
+        species_declaration_list.append((full_met_id, metabolite.name, met_compartment, metabolite))
         
         if met_sto.stoichiometry < 0:
             substrate_tuple_list.append((full_met_id,abs(met_sto.stoichiometry),metabolite.name))
@@ -307,10 +308,13 @@ def is_model_met(model_dict, syn_list):
     else:
         return None 
 
-def create_species_xml(species_declaration_list, model_file = '/Users/wbryant/work/BTH/data/iAH991/BTH_with_gprs.xml'):
+def create_species_xml(species_declaration_list, rxn_xml, model_file = '/Users/wbryant/work/BTH/data/iAH991/BTH_with_gprs.xml'):
     """ Create XML for all species not already present in model_file."""
     
+    ## Link all IDs/names in the model to the relevant metabolite 
     model_dict = get_species_id_dict(model_file)
+    
+    ## Create set of synonyms for each dbmet (key is MNXM ID)
     db_met_synonym_dict = get_met_synonyms_db()
     
     ## Dictionary to store model IDs for DB mets found in the model
@@ -320,9 +324,10 @@ def create_species_xml(species_declaration_list, model_file = '/Users/wbryant/wo
     species_declaration_string = ''
     for species_tuple in list(set(species_declaration_list)):
         
-        query_species = species_tuple[0]
+        dbmet = species_tuple[3]
         
-        model_species = is_model_met(model_dict, db_met_synonym_dict[query_species])
+        ## From list of synonyms for dbmet, can a single metabolite in the model be identified?
+        model_species = is_model_met(model_dict, db_met_synonym_dict[dbmet.id])
         
         if model_species is None:
             species_declaration_string += species_declaration.format(*species_tuple)
@@ -415,18 +420,13 @@ def convert_db_rxns_to_sbml(rxn_gene_list,
         rxn_gpr_tuples = []
         prev_rxn_id = sorted(rxn_gene_list)[0][0]
         gene_list = [sorted(rxn_gene_list)[0][1]]
-        
-        
         for rxn_gene in sorted(rxn_gene_list)[1:]:
-            
             rxn_id = rxn_gene[0]
+            print type(rxn_id)
             gene_locus = rxn_gene[1]
-            
-            
             ## If 'gene_locus' is actually a GPR, wrap it in brackets if necessary
             if "and" in gene_locus:
                 gene_locus = re.sub("(^.+$)","(\g<1>)",gene_locus)
-            
             if rxn_id == prev_rxn_id:
                 gene_list.append(gene_locus)
             else:
@@ -439,17 +439,20 @@ def convert_db_rxns_to_sbml(rxn_gene_list,
     else:
         rxn_gpr_tuples = rxn_gene_list
     
-    reaction_details = []
-    db_to_model_id_dict = {}
-    new_metabolite = []
-
+    new_met_candidates = []
     all_rxn_xml = ''
-    rxn_count_dict = {}
     for rxn_gpr in rxn_gpr_tuples:
-        
+        ## Create reaction XML (with SEED IDs where possible)    
         reaction_xml, species_declaration_list = create_reaction_xml(rxn_gpr)
-        
-        
+        all_rxn_xml += reaction_xml
+        ## Add all species to list of candidates for declaration
+        new_met_candidates.extend(species_declaration_list)
+    
+    ## Check all candidates for declaration and where metabolites can be 
+    ## identified in the model just amend the ID in the reaction XML
+    sp_string, _ = create_species_xml(new_met_candidates, all_rxn_xml, model_file_in)
+    
+    
         
         
 #         reaction = rxn_gpr[0]
@@ -564,16 +567,16 @@ def convert_db_rxns_to_sbml(rxn_gene_list,
 #                 print("{}".format(product_string[:-1]))
 #                 sys.exit(1)
 #                 
-            all_rxn_xml += reaction_xml
-    
-    ## Create XML for new species
-    sp_string = ''
-    for item in sorted(list(set(new_metabolite))):
-        met_id = item[0]
-        synonyms = Metabolite_synonym.objects.filter(metabolite__id = item[1]).values_list('synonym',flat=True)
-        met_name = max(synonyms, key=len)
-        met_comp = met_id[-1:]
-        sp_string += species_declaration.format(met_id, met_name, met_comp)
+#             all_rxn_xml += reaction_xml
+#     
+#     ## Create XML for new species
+#     sp_string = ''
+#     for item in sorted(list(set(new_metabolite))):
+#         met_id = item[0]
+#         synonyms = Metabolite_synonym.objects.filter(metabolite__id = item[1]).values_list('synonym',flat=True)
+#         met_name = max(synonyms, key=len)
+#         met_comp = met_id[-1:]
+#         sp_string += species_declaration.format(met_id, met_name, met_comp)
     
     ## Split input model and add reactions and species
     f_in = open(model_file_in,'r')
@@ -622,7 +625,7 @@ class Command(BaseCommand):
         rxn_gpr_tuples = infer_rxn_enz_pairs_from_preds(dev_model)
          
         ## Run converter for selected reactions
-#         convert_db_rxns_to_sbml(rxn_gpr_tuples, model_file_in, model_file_out, infer_gprs = False)
+        convert_db_rxns_to_sbml(rxn_gpr_tuples, model_file_in, model_file_out, infer_gprs = False)
         
         
         ## Find removal predictions and note reaction IDs in relevant file 
