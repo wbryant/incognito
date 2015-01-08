@@ -408,14 +408,32 @@ def add_kegg_ids_as_synonyms(in_file=None):
     f_in.close()
 #     counter.stop()                
                     
-def test_reactions_with_eqbtr():
-    """For each reaction in the Reaction table, attempt to get a deltaGm to establish directionality."""
+def test_reactions_with_eqbtr(file_in = None):
+    """For each reaction in the Reaction table, attempt to get a deltaGm to establish directionality.
+    
+    If file_in in specified, instead use the reactions from that file; must be properly formatted:
+     - 'ReactionID\tReactionString'
+    where ReactionString is compatible with eQuilibrator. 
+    
+    """
     from gibbs.search_results_function import QueryResults
     from time import time
     
-    all_reactions = Reaction.objects.all()
+    if file_in is not None:
+        all_reactions = []
+        f_in = open(file_in, 'r')
+        for line in f_in:
+            entry = line.strip().split("\t")
+            all_reactions.append(entry)
+        f_in.close()
+        file_out = re.sub("\.[0-9a-zA-Z]+$",".out",file_in)
+        f_out = open(file_out, 'w')
+        num_rxns = len(all_reactions)
+    else:
+        all_reactions = Reaction.objects.all()
+        num_rxns = all_reactions.count()
     
-    counter = loop_counter(all_reactions.count(), "Running through all reactions to establish reversibility")
+    counter = loop_counter(num_rxns, "Running through all reactions to establish reversibility")
     
     num_found = 0
     num_reactions = 0
@@ -430,7 +448,11 @@ def test_reactions_with_eqbtr():
     for dbrxn in all_reactions:
         num_reactions += 1
         counter.step()
-        equation = dbrxn.equation(db_source='kegg', show_compartments=False, clean_for_eqbtr=True)
+        
+        if file_in is not None:
+            equation = dbrxn[1]
+        else:
+            equation = dbrxn.equation(db_source='kegg', show_compartments=False, clean_for_eqbtr=True)
         
         eqbrxn = QueryResults(equation)
         
@@ -439,6 +461,7 @@ def test_reactions_with_eqbtr():
             
 #             dG0 = eqbrxn.dg0_prime
             dGm = eqbrxn.dgm_prime
+            
 
             ## Apply reversibility to DB
             if dGm > 30:
@@ -458,7 +481,17 @@ def test_reactions_with_eqbtr():
 #                 print(" -> {}/{}".format(num_irrev_found, num_reactions))
         else:
             num_not_found += 1
-    
+            dGm = 'not found'
+
+        if file_in is not None:
+            f_out.write("{}\t{}\t{}\n".format(
+                dbrxn[0],
+                dGm,
+                equation
+            ))
+
+    if file_in is not None:
+        f_out.close()
     counter.stop()
     
     time_taken = time()-t0
