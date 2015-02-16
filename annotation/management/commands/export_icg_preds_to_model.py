@@ -7,6 +7,62 @@ from myutils.django.cogzymes_utils import get_gpr_from_reaction
 from libsbml import SBMLDocument, writeSBMLToFile, SBMLReader
 from collections import Counter
 from copy import deepcopy
+from cogzymes.management.commands.classify_predictions_small import infer_rxn_enz_pairs_from_preds
+
+
+class Command(BaseCommand):
+    
+    help = 'Take a set of reactions from the DB and export all to the SBML file given.'
+        
+    def handle(self, *args, **options):
+        
+        """ Export ICG predictions to SBML, along with a set of DB reactions if required. 
+        """ 
+        
+        ## Set model and input/output files
+        model_file_in = '/Users/wbryant/work/BTH/data/iAH991/BTH_with_gprs.xml'
+        dev_model = Source.objects.get(name='iAH991')        
+        try:
+            model_file_out = args[0]
+        except:
+            model_file_out = '/Users/wbryant/work/BTH/analysis/working_models/scratch_model.xml'
+
+        ## Infer direct reaction/enzyme predictions from Reaction_preds for dev_model (InCOGnito)
+        rxn_gpr_tuples = infer_rxn_enz_pairs_from_preds(dev_model)
+         
+        ## Run converter for selected reactions
+        rxns_added = convert_db_rxns_to_sbml(rxn_gpr_tuples, model_file_in, model_file_out, infer_gprs = False)
+        
+
+        ## Find removal predictions and note reaction IDs in relevant file, along with all added reaction IDs
+        removal_reaction_list = list(Reaction_pred.objects.filter(
+            dev_model=dev_model,
+            status='rem')\
+            .values_list('reaction__db_reaction__name', flat=True)\
+            .distinct())
+        
+
+
+
+
+        
+        ## Find relevant model reaction IDs
+        abc_file_out = '/Users/wbryant/work/BTH/analysis/working_models/scratch_model_removals.txt' 
+        abc_file = open(abc_file_out, "w")
+        for db_rxn in removal_reaction_list:    
+            try:
+                model_rxn_id = Model_reaction.objects.get(db_reaction=db_rxn, source=dev_model).model_id
+            except:
+                try:
+                    model_rxn_id = Model_reaction.objects.get(db_reaction__name=db_rxn, source=dev_model).model_id
+                except:
+                    print("Could not find relevant reaction by either ID or name: '{}'".format(db_rxn))
+                    continue
+            abc_file.write("{}\trem\n".format(model_rxn_id[2:]))            
+        for rxn_id in rxns_added:
+            abc_file.write("{}\tadd\n".format(rxn_id))
+        abc_file.close() 
+
 
 # Example species reference: '<speciesReference species="M_h_c" stoichiometry="1"/>'
 
@@ -602,89 +658,6 @@ def convert_db_rxns_to_sbml(rxn_gene_list,
     
     return added_rxns
 
-from cogzymes.management.commands.classify_predictions_small import infer_rxn_enz_pairs_from_preds
-
 
                     
-class Command(BaseCommand):
     
-    help = 'Take a set of reactions from the DB and export all to the SBML file given.'
-        
-    def handle(self, *args, **options):
-        
-        """ COMMAND DESCRIPTION
-            
-        """ 
-        
-        model_file_in = '/Users/wbryant/work/BTH/data/iAH991/BTH_with_gprs.xml'
-        dev_model = Source.objects.get(name='iAH991')
-        
-        try:
-            model_file_out = args[0]
-        except:
-            model_file_out = '/Users/wbryant/work/BTH/analysis/working_models/scratch_model.xml'
-        
-        rxn_gene_list = []
-        
-        
-        ## Infer direct reaction/enzyme predictions from Reaction_preds for dev_model (InCOGnito)
-        rxn_gpr_tuples = infer_rxn_enz_pairs_from_preds(dev_model)
-         
-        ## Run converter for selected reactions
-        rxns_added = convert_db_rxns_to_sbml(rxn_gpr_tuples, model_file_in, model_file_out, infer_gprs = False)
-        
-
-        ## Find removal predictions and note reaction IDs in relevant file, along with all added reaction IDs
-        
-        abc_file_out = '/Users/wbryant/work/BTH/analysis/working_models/scratch_model_removals.txt' 
-        
-        removal_reaction_list = list(Reaction_pred.objects.filter(
-            dev_model=dev_model,
-            status='rem')\
-            .values_list('reaction__db_reaction__name', flat=True)\
-            .distinct())
-        
-        abc_file = open(abc_file_out, "w")
-        
-        ## Find relevant model reaction IDs
-        removal_model_rxn_ids = []
-        for db_rxn in removal_reaction_list:
-            
-            try:
-                model_rxn_id = Model_reaction.objects.get(db_reaction=db_rxn, source=dev_model).model_id
-            except:
-                try:
-                    model_rxn_id = Model_reaction.objects.get(db_reaction__name=db_rxn, source=dev_model).model_id
-                except:
-                    print db_rxn
-                    continue
-            abc_file.write("{}\trem\n".format(model_rxn_id[2:]))            
-#             removal_model_rxn_ids.append(model_rxn_id)
-        
-        for rxn_id in rxns_added:
-            abc_file.write("{}\tadd\n".format(rxn_id))
-        
-        abc_file.close()
-
-
-
-
-
-
-
-
-
-
-
-#         ## Find removal predictions and set relevant upper and lower bounds to 0 
-#         
-#         removal_reaction_list = list(Reaction_pred.objects.filter(
-#             dev_model=dev_model,
-#             status='rem')\
-#             .values_list('reaction__db_reaction__name', flat=True)\
-#             .distinct())
-#         
-#         stop_db_rxns_in_sbml(removal_reaction_list, dev_model)
-#         
-        
-        
