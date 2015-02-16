@@ -25,7 +25,7 @@ STATICFILES_DIRS = [
 SECRET_KEY = 'prsd4_lpo=axx(29)d-wb0z)+0x*(zq&_s16!%)1ul8=wasqqm'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 TEMPLATE_DEBUG = DEBUG
 
