@@ -180,25 +180,80 @@ def get_valid_preds(ref_model, dev_model = None):
     
     return ref_not_dev, dev_rxns, ref_rxns, dev_not_ref
 
-# class PredictionAnalysed():
-#     """A specific reaction/cogzyme pair predicted by InCOGnito, along with the 
-#     analysis data for filtering."""
-#     
-#     def __init__(self, reaction_pred):
-#         self.db_reaction = db_reaction
-#         self.cogzyme = cogzyme
-#         self.dev_model = dev_model
-#         
-#         self.num_models_predicting = Reaction_pred.objects\
-#             .filter(
-#                 dev_model=self.dev_model,
-#                 reaction__db_reaction=self.db_reaction,
-#                 cogzyme=self.cogzyme)\
-#             .values_list('ref_model__name', flat=True)\
-#             .distinct().count()
+class PredictionAnalysed():
+    """A specific reaction/cogzyme pair predicted by InCOGnito, along with the 
+    analysis data for filtering."""
+     
+    def __init__(self, dev_model, db_reaction_id, cogzyme_id):
+        self.db_reaction = Reaction.objects.get(pk=db_reaction_id)
+        self.cogzyme = Cogzyme.objects.get(pk=cogzyme_id)
+        self.dev_model = dev_model
         
+        ## Number of ref_models predicting this reaction/cogzyme pair
+        self.num_models_predicting = Reaction_pred.objects\
+            .filter(
+                dev_model=self.dev_model,
+                reaction__db_reaction=self.db_reaction,
+                cogzyme=self.cogzyme)\
+            .values_list('ref_model__name', flat=True)\
+            .distinct().count()
         
+        ## Proportion of reaction metabolites found in dev_model
+        num_mets = self.db_reaction.stoichiometry_set.all().count()
+        num_mets_mapped = self.db_reaction.stoichiometry_set\
+            .filter(metabolite__model_metabolite__source=dev_model)\
+            .distinct().count()
+        self.mapped_proportion = float(num_mets_mapped)/num_mets       
+
+        ## Infer all potential enzymes from gene locus constituents
+        locus_cog_data = Gene.objects\
+            .filter(
+                organism__source=self.dev_model,
+                cogs__cogzyme=self.cogzyme)\
+            .values('locus_tag','cogs__name')
+        cog_locus_dict = {}
+        for locus_cog in locus_cog_data:
+            dict_append(cog_locus_dict,locus_cog['cogs__name'],locus_cog['locus_tag'])
+        cog_locus_lists = []
+        for _, locus_list in cog_locus_dict.items():
+            cog_locus_lists.append(locus_list)
+        self.enzyme_list = [list(genes) for genes in product(*cog_locus_lists)]
         
+        self.num_reactions_for_this_cogzyme = Reaction.objects\
+            .filter(model_reaction__cog_enzymes__cogzyme=self.cogzyme)\
+            .distinct().count()
+    
+    def print_stats(self):
+        print("Reaction '{}', COGzyme {}:".format(self.db_reaction, self.cogzyme))
+        print(" - number of models predicting = {}".format(self.num_models_predicting))
+        print(" - proportion of metabolites mapped = {}".format(self.mapped_proportion))
+        print(" - number of reactions for this cogzyme = {}".format(self.num_reactions_for_this_cogzyme))
+        print(" - number of candidate enzymes = {}".format(len(self.enzyme_list)))
+    
+    def print_enzymes(self):
+        print("Candidate enzymes:")
+        for idx, enzyme in enumerate(self.enzyme_list):
+            print("{})\t{}".format(idx+1, enzyme))
+    
+def classification_process(dev_model):
+    """Collect predictions and do analyses."""
+    
+    ## Get all db_reaction/cogzyme pairs in predictions for dev_model
+    analysed_preds = []
+    reaction_cogzyme_preds = Reaction_pred.objects\
+        .filter(
+            dev_model=dev_model,
+            reaction__db_reaction__isnull=False)\
+        .values("reaction__db_reaction__pk","cogzyme__pk")\
+        .distinct()
+    for rxn_cz in reaction_cogzyme_preds:
+        new_pred_analysed = PredictionAnalysed(
+                    dev_model, 
+                    rxn_cz["reaction__db_reaction__pk"],
+                    rxn_cz["cogzyme__pk"])
+        analysed_preds.append(new_pred_analysed)
+    
+    return analysed_preds
 
 def classify_preds(dev_model):
     
