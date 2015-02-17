@@ -31,9 +31,9 @@ class Command(BaseCommand):
         rxn_gpr_tuples = infer_rxn_enz_pairs_from_preds(dev_model)
          
         ## Run converter for selected reactions
+        met_mapping_cutoff = 0.5
         rxns_added = convert_db_rxns_to_sbml(rxn_gpr_tuples, model_file_in, model_file_out, infer_gprs = False)
         
-
         ## Find removal predictions and note reaction IDs in relevant file, along with all added reaction IDs
         removal_reaction_list = list(Reaction_pred.objects.filter(
             dev_model=dev_model,
@@ -41,12 +41,7 @@ class Command(BaseCommand):
             .values_list('reaction__db_reaction__name', flat=True)\
             .distinct())
         
-
-
-
-
-        
-        ## Find relevant model reaction IDs
+        ## Find relevant model reaction IDs and note in ABC file
         abc_file_out = '/Users/wbryant/work/BTH/analysis/working_models/scratch_model_removals.txt' 
         abc_file = open(abc_file_out, "w")
         for db_rxn in removal_reaction_list:    
@@ -63,39 +58,216 @@ class Command(BaseCommand):
             abc_file.write("{}\tadd\n".format(rxn_id))
         abc_file.close() 
 
+def convert_db_rxns_to_sbml(rxn_gene_list, 
+                            model_file_in = '/Users/wbryant/work/BTH/data/iAH991/BTH_with_gprs.xml', 
+                            model_file_out = '/Users/wbryant/work/BTH/analysis/working_models/scratch_model.xml',
+                            infer_gprs = True
+                            ):
+    """Take a list of reactions from the database and produce XML compatible with the model in model_file.
+    
+    Reaction list is IDs and gene dependencies from predictions in the DB.
+    
+    """
+    
+    comp_swap = {}
+    comp_swap['e'] = 'c'
+    comp_swap['c'] = 'e'
+    
+    ## Get dictionaries for metabolite IDs in both model and DB. 
+    
+    model_dict = get_species_id_dict(model_file_in)
+    db_met_syn_dict = get_met_synonyms_db()
+    
+    if infer_gprs:
+        ## Create tuples from rxn_gene_list with GPRs for each predicted reaction
+        rxn_gpr_tuples = []
+        prev_rxn_id = sorted(rxn_gene_list)[0][0]
+        gene_list = [sorted(rxn_gene_list)[0][1]]
+        
+        
+        for rxn_gene in sorted(rxn_gene_list)[1:]:
+            
+            rxn_id = rxn_gene[0]
+            gene_locus = rxn_gene[1]
+            
+            
+            ## If 'gene_locus' is actually a GPR, wrap it in brackets if necessary
+            if "and" in gene_locus:
+                gene_locus = re.sub("(^.+$)","(\g<1>)",gene_locus)
+            
+            if rxn_id == prev_rxn_id:
+                gene_list.append(gene_locus)
+            else:
+                gene_list = list(set(gene_list))
+                rxn_gpr_tuples.append((prev_rxn_id," or ".join(gene_list)))
+                prev_rxn_id = rxn_id
+                gene_list = [gene_locus]
+        gene_list = list(set(gene_list))
+        rxn_gpr_tuples.append((rxn_id," or ".join(gene_list)))
+    else:
+        rxn_gpr_tuples = rxn_gene_list
+    
+    reaction_details = []
+    db_to_model_id_dict = {}
+    new_metabolite = []
 
-# Example species reference: '<speciesReference species="M_h_c" stoichiometry="1"/>'
+    all_rxn_xml = ''
+    rxn_count_dict = {}
+    added_rxns = []
+    for rxn_gpr in rxn_gpr_tuples:
+        
+        reaction = rxn_gpr[0]
+        gpr = rxn_gpr[1]
+        
+        reaction_id = reaction.name
+        reaction_name = reaction.name
+        reaction_source = reaction.source.name
+        
+        if reaction_id not in rxn_count_dict:
+            rxn_count_dict[reaction_id] = 1
+        else:
+            rxn_count_dict[reaction_id] += 1
+        
+        id_suffix = "_enz" + str(rxn_count_dict[reaction_id])
+        reaction_id += id_suffix
+        
+        ## Get reaction reversibility
+        upper_bound = 1000
+        lower_bound = -1000
+        if reaction.reversibility_eqbtr > 0:
+            lower_bound = 0
+        elif reaction.reversibility_eqbtr < 0:
+            upper_bound = 0
+        
+        stoichiometry = Stoichiometry.objects.filter(reaction=reaction)
+        
+        substrate_tuple_list = []
+        product_tuple_list = []    
+        
+        balanced_reaction = True
+        
+        for met_sto in stoichiometry:
+            ## For each metabolite in the stoichiometry, check whether it's in the model
+            
+            metabolite = met_sto.metabolite
+#             met_name = metabolite.name.lower()
+#             if (met_name[:2] == "a ") or (met_name[:3] == "an "):
+#                 print met_name
+             
+            ## Get metabolite compartment 
+            try:
+                mnx_compartment = met_sto.compartment.values_list('id', flat=True)
+            except:
+                mnx_compartment = '' 
+            if mnx_compartment == 'MNXC2':
+                met_compartment = '_e'
+            else:
+                met_compartment = '_c'
 
-reaction_string = u"""      <reaction id="{}" name="{}" reversible="true">
-        <notes>
-          <body xmlns="http://www.w3.org/1999/xhtml">
-            <p>SOURCE: {}</p>
-            <p>GENE_ASSOCIATION: {}</p>
-          </body>
-        </notes>
-        <listOfReactants>
-{}
-        </listOfReactants>
-        <listOfProducts>
-{}
-        </listOfProducts>
-        <kineticLaw>
-          <math xmlns="http://www.w3.org/1998/Math/MathML">
-            <ci> FLUX_VALUE </ci>
-          </math>
-          <listOfParameters>
-            <parameter id="LOWER_BOUND" value="{}" units="mmol_per_gDW_per_hr" constant="false"/>
-            <parameter id="UPPER_BOUND" value="{}" units="mmol_per_gDW_per_hr" constant="false"/>
-            <parameter id="FLUX_VALUE" value="0" units="mmol_per_gDW_per_hr" constant="false"/>
-            <parameter id="OBJECTIVE_COEFFICIENT" value="0" units="mmol_per_gDW_per_hr" constant="false"/>
-          </listOfParameters>
-        </kineticLaw>
-      </reaction>
-"""
+            met_id = metabolite.id
+            original_id = metabolite.id
+            
+            ## Potential matching DB synonyms to model metabolites
+            synonym_list = db_met_syn_dict[met_id]
+            
+            ## Make compartment-specific synonyms
+            synonym_list = [synonym + met_compartment for synonym in synonym_list]
+            
+            ## If there is a specific metabolite then find it.
+            model_id = is_model_met(model_dict, synonym_list)
+            
+            if model_id is None:
+                for synonym in synonym_list:
+                    #print synonym
+                    synonym = synonym[:-1] + comp_swap[synonym[-1:]]
+                model_id_alt = is_model_met(model_dict, synonym_list)
+                if model_id_alt is not None:
+                    ## metabolite is found, but in the other compartment.
+                    
+                    model_id = model_id_alt[:-1] + comp_swap[synonym[-1:]]
+                    print("Swapped compartment: {} - {}".format(met_id, model_id))
+                else:
+                    ## Metabolite is not found - try to find a seed ID
+                    try:
+                        met_id_list = Metabolite_synonym.objects\
+                            .filter(metabolite=metabolite, source__name='seed')\
+                            .values_list('synonym', flat=True)
+                        met_id = min(met_id_list, key=len)
+                    except:
+                        pass
+                    
+                    model_id = "M_" + met_id + met_compartment
+                
+                ## Metabolite (incl. compartment) was not found - will be added to species declaration
+                new_metabolite.append((model_id, original_id))
+            else:
+                model_id = "M_" + model_id
+        
+            ## Add to relevant part of equation
+            if met_sto.stoichiometry < 0:
+                substrate_tuple_list.append((model_id,abs(met_sto.stoichiometry)))
+            elif met_sto.stoichiometry > 0:
+                product_tuple_list.append((model_id,abs(met_sto.stoichiometry)))
+            else:
+                print("Metabolite '%s' (Reaction '%s') did not have valid stoichiometry ..." % (model_id, reaction_id))
+                balanced_reaction = False
+            
+            db_to_model_id_dict[met_id] = model_id
+        
+        if balanced_reaction:
+            ## Create substrate and product strings
+            substrate_string = ''
+            for substrate in substrate_tuple_list:
+                substrate_string += species_reference.format(*substrate)
+            product_string = ''
+            for product in product_tuple_list:
+                product_string += species_reference.format(*product)
+            
+            ## Create reaction string 
+            reaction_xml = reaction_string.format(
+                reaction_id,
+                reaction_name,
+                reaction_source,
+                gpr,
+                substrate_string[:-1],
+                product_string[:-1],
+                lower_bound,
+                upper_bound) 
+            
+            if lower_bound == 0:
+                print 'for', reaction_id
+            elif upper_bound == 0:
+                print 'back', reaction_id
+            
+            all_rxn_xml += reaction_xml
+            added_rxns.append(reaction_id)
+    
+    ## Create XML for new species
+    sp_string = ''
+    for item in sorted(list(set(new_metabolite))):
+        met_id = item[0]
+        synonyms = Metabolite_synonym.objects.filter(metabolite__id = item[1]).values_list('synonym',flat=True)
+        met_name = max(synonyms, key=len)
+        met_comp = met_id[-1:]
+        sp_string += species_declaration.format(met_id, met_name, met_comp)
+    
+    ## Split input model and add reactions and species
+    f_in = open(model_file_in,'r')
+    f_out = open(model_file_out,'w')
+     
+    for line in f_in:
+        if '</listOfSpecies>' in line:
+            f_out.write(sp_string.encode('utf8'))
+        elif '</listOfReactions>' in line:
+            f_out.write(all_rxn_xml.encode('utf8'))
+         
+        f_out.write(line)
+    
+    f_in.close() 
+    f_out.close()
+    
+    return added_rxns
 
-species_reference = u'          <speciesReference species="{}" stoichiometry="{}"/>\n'
-
-species_declaration = u'      <species id="{}" name="{}" compartment="{}" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false"></species>\n'
 
 def get_species_id_dict(model_file = '/Users/wbryant/work/BTH/data/iAH991/BTH_with_gprs.xml'):
     """ Return a dictionary of species IDs from IDs and names from the input model."""
@@ -445,219 +617,41 @@ def stop_db_rxns_in_sbml(
     
     
     
-def convert_db_rxns_to_sbml(rxn_gene_list, 
-                            model_file_in = '/Users/wbryant/work/BTH/data/iAH991/BTH_with_gprs.xml', 
-                            model_file_out = '/Users/wbryant/work/BTH/analysis/working_models/scratch_model.xml',
-                            infer_gprs = True
-                            ):
-    """Take a list of reactions from the database and produce XML compatible with the model in model_file.
-    
-    Reaction list is IDs and gene dependencies from predictions in the DB.
-    
-    """
-    
-    comp_swap = {}
-    comp_swap['e'] = 'c'
-    comp_swap['c'] = 'e'
-    
-    ## Get dictionaries for metabolite IDs in both model and DB. 
-    
-    model_dict = get_species_id_dict(model_file_in)
-    db_met_syn_dict = get_met_synonyms_db()
-    
-    if infer_gprs:
-        ## Create tuples from rxn_gene_list with GPRs for each predicted reaction
-        rxn_gpr_tuples = []
-        prev_rxn_id = sorted(rxn_gene_list)[0][0]
-        gene_list = [sorted(rxn_gene_list)[0][1]]
-        
-        
-        for rxn_gene in sorted(rxn_gene_list)[1:]:
-            
-            rxn_id = rxn_gene[0]
-            gene_locus = rxn_gene[1]
-            
-            
-            ## If 'gene_locus' is actually a GPR, wrap it in brackets if necessary
-            if "and" in gene_locus:
-                gene_locus = re.sub("(^.+$)","(\g<1>)",gene_locus)
-            
-            if rxn_id == prev_rxn_id:
-                gene_list.append(gene_locus)
-            else:
-                gene_list = list(set(gene_list))
-                rxn_gpr_tuples.append((prev_rxn_id," or ".join(gene_list)))
-                prev_rxn_id = rxn_id
-                gene_list = [gene_locus]
-        gene_list = list(set(gene_list))
-        rxn_gpr_tuples.append((rxn_id," or ".join(gene_list)))
-    else:
-        rxn_gpr_tuples = rxn_gene_list
-    
-    reaction_details = []
-    db_to_model_id_dict = {}
-    new_metabolite = []
 
-    all_rxn_xml = ''
-    rxn_count_dict = {}
-    added_rxns = []
-    for rxn_gpr in rxn_gpr_tuples:
-        
-        reaction = rxn_gpr[0]
-        gpr = rxn_gpr[1]
-        
-        reaction_id = reaction.name
-        reaction_name = reaction.name
-        reaction_source = reaction.source.name
-        
-        if reaction_id not in rxn_count_dict:
-            rxn_count_dict[reaction_id] = 1
-        else:
-            rxn_count_dict[reaction_id] += 1
-        
-        id_suffix = "_enz" + str(rxn_count_dict[reaction_id])
-        reaction_id += id_suffix
-        
-        ## Get reaction reversibility
-        upper_bound = 1000
-        lower_bound = -1000
-        if reaction.reversibility_eqbtr > 0:
-            lower_bound = 0
-        elif reaction.reversibility_eqbtr < 0:
-            upper_bound = 0
-        
-        stoichiometry = Stoichiometry.objects.filter(reaction=reaction)
-        
-        substrate_tuple_list = []
-        product_tuple_list = []    
-        
-        balanced_reaction = True
-        
-        for met_sto in stoichiometry:
-            ## For each metabolite in the stoichiometry, check whether it's in the model
-            
-            metabolite = met_sto.metabolite
-#             met_name = metabolite.name.lower()
-#             if (met_name[:2] == "a ") or (met_name[:3] == "an "):
-#                 print met_name
-             
-            ## Get metabolite compartment 
-            try:
-                mnx_compartment = met_sto.compartment.values_list('id', flat=True)
-            except:
-                mnx_compartment = '' 
-            if mnx_compartment == 'MNXC2':
-                met_compartment = '_e'
-            else:
-                met_compartment = '_c'
 
-            met_id = metabolite.id
-            original_id = metabolite.id
-            
-            ## Potential matching DB synonyms to model metabolites
-            synonym_list = db_met_syn_dict[met_id]
-            
-            ## Make compartment-specific synonyms
-            synonym_list = [synonym + met_compartment for synonym in synonym_list]
-            
-            ## If there is a specific metabolite then find it.
-            model_id = is_model_met(model_dict, synonym_list)
-            
-            if model_id is None:
-                for synonym in synonym_list:
-                    #print synonym
-                    synonym = synonym[:-1] + comp_swap[synonym[-1:]]
-                model_id_alt = is_model_met(model_dict, synonym_list)
-                if model_id_alt is not None:
-                    ## metabolite is found, but in the other compartment.
-                    
-                    model_id = model_id_alt[:-1] + comp_swap[synonym[-1:]]
-                    print("Swapped compartment: {} - {}".format(met_id, model_id))
-                else:
-                    ## Metabolite is not found - try to find a seed ID
-                    try:
-                        met_id_list = Metabolite_synonym.objects\
-                            .filter(metabolite=metabolite, source__name='seed')\
-                            .values_list('synonym', flat=True)
-                        met_id = min(met_id_list, key=len)
-                    except:
-                        pass
-                    
-                    model_id = "M_" + met_id + met_compartment
-                
-                ## Metabolite (incl. compartment) was not found - will be added to species declaration
-                new_metabolite.append((model_id, original_id))
-            else:
-                model_id = "M_" + model_id
-        
-            ## Add to relevant part of equation
-            if met_sto.stoichiometry < 0:
-                substrate_tuple_list.append((model_id,abs(met_sto.stoichiometry)))
-            elif met_sto.stoichiometry > 0:
-                product_tuple_list.append((model_id,abs(met_sto.stoichiometry)))
-            else:
-                print("Metabolite '%s' (Reaction '%s') did not have valid stoichiometry ..." % (model_id, reaction_id))
-                balanced_reaction = False
-            
-            db_to_model_id_dict[met_id] = model_id
-        
-        if balanced_reaction:
-            ## Create substrate and product strings
-            substrate_string = ''
-            for substrate in substrate_tuple_list:
-                substrate_string += species_reference.format(*substrate)
-            product_string = ''
-            for product in product_tuple_list:
-                product_string += species_reference.format(*product)
-            
-            ## Create reaction string 
-            reaction_xml = reaction_string.format(
-                reaction_id,
-                reaction_name,
-                reaction_source,
-                gpr,
-                substrate_string[:-1],
-                product_string[:-1],
-                lower_bound,
-                upper_bound) 
-            
-            if lower_bound == 0:
-                print 'for', reaction_id
-            elif upper_bound == 0:
-                print 'back', reaction_id
-            
-            all_rxn_xml += reaction_xml
-            added_rxns.append(reaction_id)
-    
-    ## Create XML for new species
-    sp_string = ''
-    for item in sorted(list(set(new_metabolite))):
-        met_id = item[0]
-        synonyms = Metabolite_synonym.objects.filter(metabolite__id = item[1]).values_list('synonym',flat=True)
-        met_name = max(synonyms, key=len)
-        met_comp = met_id[-1:]
-        sp_string += species_declaration.format(met_id, met_name, met_comp)
-    
-    ## Split input model and add reactions and species
-    f_in = open(model_file_in,'r')
-    f_out = open(model_file_out,'w')
-     
-#     print all_rxn_xml
-#     print sp_string
-     
-    for line in f_in:
-        if '</listOfSpecies>' in line:
-            f_out.write(sp_string.encode('utf8'))
-        elif '</listOfReactions>' in line:
-            f_out.write(all_rxn_xml.encode('utf8'))
-         
-        f_out.write(line)
-    
-    f_in.close() 
-    f_out.close()
-    
-    return added_rxns
 
+# Example species reference: '<speciesReference species="M_h_c" stoichiometry="1"/>'
+
+reaction_string = u"""      <reaction id="{}" name="{}" reversible="true">
+        <notes>
+          <body xmlns="http://www.w3.org/1999/xhtml">
+            <p>SOURCE: {}</p>
+            <p>GENE_ASSOCIATION: {}</p>
+          </body>
+        </notes>
+        <listOfReactants>
+{}
+        </listOfReactants>
+        <listOfProducts>
+{}
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <ci> FLUX_VALUE </ci>
+          </math>
+          <listOfParameters>
+            <parameter id="LOWER_BOUND" value="{}" units="mmol_per_gDW_per_hr" constant="false"/>
+            <parameter id="UPPER_BOUND" value="{}" units="mmol_per_gDW_per_hr" constant="false"/>
+            <parameter id="FLUX_VALUE" value="0" units="mmol_per_gDW_per_hr" constant="false"/>
+            <parameter id="OBJECTIVE_COEFFICIENT" value="0" units="mmol_per_gDW_per_hr" constant="false"/>
+          </listOfParameters>
+        </kineticLaw>
+      </reaction>
+"""
+
+species_reference = u'          <speciesReference species="{}" stoichiometry="{}"/>\n'
+
+species_declaration = u'      <species id="{}" name="{}" compartment="{}" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false"></species>\n'
 
                     
     

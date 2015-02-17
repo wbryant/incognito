@@ -180,24 +180,39 @@ def get_valid_preds(ref_model, dev_model = None):
     
     return ref_not_dev, dev_rxns, ref_rxns, dev_not_ref
 
+# class PredictionAnalysed():
+#     """A specific reaction/cogzyme pair predicted by InCOGnito, along with the 
+#     analysis data for filtering."""
+#     
+#     def __init__(self, reaction_pred):
+#         self.db_reaction = db_reaction
+#         self.cogzyme = cogzyme
+#         self.dev_model = dev_model
+#         
+#         self.num_models_predicting = Reaction_pred.objects\
+#             .filter(
+#                 dev_model=self.dev_model,
+#                 reaction__db_reaction=self.db_reaction,
+#                 cogzyme=self.cogzyme)\
+#             .values_list('ref_model__name', flat=True)\
+#             .distinct().count()
+        
+        
+        
 
 def classify_preds(dev_model):
     
     max_cz_reactions = 8
-    min_mets_mapped = 0.5
+#     min_mets_mapped = 0.5
     min_num_models = 2
     
     ## Get all predictions
-    dbrxn_predictions = Reaction.objects.filter(
-        model_reaction__reaction_pred__dev_model=dev_model,
-    ).distinct()
-    print("{} dbreaction predictions.".format(dbrxn_predictions.count()))
-    
-    
-#     ## Create dict for binary classifications of all predicted reactions
-#     rxn_class = {}
-#     for rxn in dbrxn_predictions:
-#         rxn_class[rxn.id] = []
+    dbrxn_predictions = Reaction.objects\
+        .filter(
+            model_reaction__reaction_pred__dev_model=dev_model,
+            model_reaction__reaction_pred__status='add')\
+        .distinct()
+    print("{} dbreactions predicted.".format(dbrxn_predictions.count()))
     
     ## Count num models for each prediction
     pred_counts = Counter(zip(*list(
@@ -206,59 +221,50 @@ def classify_preds(dev_model):
             .values_list('reaction__db_reaction__name','ref_model__name')
             .distinct()
         ))[0])
-    print("{} distinct dbreactions predicted.".format(len(pred_counts)))
+    print("{} dbreaction additions predicted.".format(len(pred_counts)))
     
-    num_mapped_ok = 0
+#     num_mapped_ok = 0
     num_pred_count_ok = 0
     num_cz_specificity_ok = 0
     
-    ## for each pred_rxn/cogzyme pair
+    ## for each predicted reaction, filter for suitability 
     valid_predictions = []
     for dbrxn in dbrxn_predictions:
-        ### Test number of mapped mets
-        
-        num_mets = dbrxn.stoichiometry_set.all().count()
-        num_mets_mapped = dbrxn.stoichiometry_set.filter(metabolite__model_metabolite__source=dev_model).distinct().count()
-        mapped_proportion = float(num_mets_mapped)/num_mets
-        if mapped_proportion < min_mets_mapped:
-            continue
-        
-        num_mapped_ok += 1
-        
-        ###! test number of models predicting
-        
+
+        ## test number of models predicting
         if pred_counts[dbrxn.name] < min_num_models:
             continue
-        
         num_pred_count_ok += 1
         
-        ###! test cogzyme specificity
-        
-        pred_cogzymes = Cogzyme.objects.filter(
-            reaction_pred__dev_model=dev_model,
-            reaction_pred__reaction__db_reaction=dbrxn
-            )\
+        ## test cogzyme specificity
+        pred_cogzymes = Cogzyme.objects\
+            .filter(
+                reaction_pred__dev_model=dev_model,
+                reaction_pred__reaction__db_reaction=dbrxn)\
             .distinct()
-        
+        ## cz_specific: a list of cogzymes catalysing sufficiently few reactions
         cz_specific = []
         for cogzyme in pred_cogzymes:
             num_rxns = Reaction.objects\
                 .filter(model_reaction__cog_enzymes__cogzyme=cogzyme)\
-                .distinct()\
-                .count()
-            
+                .distinct().count()
             if num_rxns <= max_cz_reactions:
                 cz_specific.append(cogzyme)
-        
         if len(cz_specific) == 0:
             continue
-        
         num_cz_specificity_ok += 1
-        
+
+        ### Test number of mapped mets - pass as variable
+        num_mets = dbrxn.stoichiometry_set.all().count()
+        num_mets_mapped = dbrxn.stoichiometry_set\
+            .filter(metabolite__model_metabolite__source=dev_model)\
+            .distinct()\
+            .count()
+        mapped_proportion = float(num_mets_mapped)/num_mets
         for cz in cz_specific:
-            valid_predictions.append([dbrxn, cz])
+            valid_predictions.append((dbrxn, cz, mapped_proportion))
     
-    print("{}\t{}\t{}".format(num_mapped_ok, num_pred_count_ok, num_cz_specificity_ok))
+    print("{}\t{}\t{}".format(num_pred_count_ok, num_cz_specificity_ok))
     
     return valid_predictions
     
@@ -275,7 +281,7 @@ def infer_rxn_enz_pairs_from_preds(dev_model):
         dbrxn = pred[0]
         cz = pred[1]
         
-        
+        ## Create dictionary of lists of loci for each COG in the COGzyme
         locus_cog_data = Gene.objects\
             .filter(
                 organism__source=dev_model,
@@ -285,20 +291,20 @@ def infer_rxn_enz_pairs_from_preds(dev_model):
         for locus_cog in locus_cog_data:
             dict_append(cog_locus_dict,locus_cog['cogs__name'],locus_cog['locus_tag'])
         
-        
+        ## Multiply out all combinations of loci making up the cogzyme
         cog_locus_lists = []
         for _, locus_list in cog_locus_dict.items():
             cog_locus_lists.append(locus_list)
-            
         enzyme_list = [list(genes) for genes in product(*cog_locus_lists)]
         
+        ## Filter out poorly defined cogzymes (i.e. large numbers of potential enzymes) 
         if len(enzyme_list) <= max_enzymes:
             for enzyme in enzyme_list:
                 enzyme.sort()
                 gpr_string = "( "
                 gpr_string += " and ".join(enzyme)
                 gpr_string += " )"
-                rxn_enz_tuples.append((dbrxn, gpr_string))
+                rxn_enz_tuples.append((dbrxn, gpr_string, pred[2]))
     
     rxn_enz_tuples = find_preds_valid_transport(rxn_enz_tuples)
     
