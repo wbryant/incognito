@@ -2,13 +2,18 @@ from django.core.management.base import BaseCommand, CommandError
 from annotation.models import Reaction, Stoichiometry, Metabolite, Compartment, Metabolite_synonym, Source, Model_reaction
 from cogzymes.models import Reaction_pred, Cogzyme, Gene
 import sys, os, re
-from myutils.general.utils import loop_counter, dict_append
+from myutils.general.utils import loop_counter, dict_append, preview_dict
 from myutils.django.cogzymes_utils import get_gpr_from_reaction
 from libsbml import SBMLDocument, writeSBMLToFile, SBMLReader
 from collections import Counter
 from copy import deepcopy
 from cogzymes.management.commands.classify_predictions_small import infer_rxn_enz_pairs_from_preds
 from itertools import groupby, product
+from math import sqrt
+from cobra.io import read_sbml_model, write_sbml_model
+import cobra
+
+os.environ["PYTHONWARNINGS"] ="ignore"
 
 # Example species reference: '<speciesReference species="M_h_c" stoichiometry="1"/>'
 
@@ -16,7 +21,7 @@ reaction_string = u"""      <reaction id="{{}}" name="{}" reversible="true">
         <notes>
           <body xmlns="http://www.w3.org/1999/xhtml">
             <p>SOURCE: {}</p>
-            <p>GENE_ASSOCIATION: {}</p>
+            <p>GENE_ASSOCIATION: {{}}</p>
           </body>
         </notes>
         <listOfReactants>
@@ -142,7 +147,7 @@ def convert_db_rxns_to_sbml(rxn_gene_list,
         rxn_gpr_tuples = rxn_gene_list
     
     reaction_details = []
-    db_to_model_id_dict = {}
+#     db_to_model_id_dict = {}
     new_metabolite = []
 
     all_rxn_xml = ''
@@ -246,7 +251,7 @@ def convert_db_rxns_to_sbml(rxn_gene_list,
                 print("Metabolite '%s' (Reaction '%s') did not have valid stoichiometry ..." % (model_id, reaction_id))
                 balanced_reaction = False
             
-            db_to_model_id_dict[met_id] = model_id
+#             db_to_model_id_dict[met_id] = model_id
         
         if balanced_reaction:
             ## Create substrate and product strings
@@ -649,28 +654,173 @@ def stop_db_rxns_in_sbml(
 #     
 #     ## Create 
 
-def collate_predictions(dev_model, model_file_in="/Users/wbryant/work/BTH/data/iAH991/BTH_with_gprs.xml"):
+def collate_predictions(dev_model, model_file_in, prior_novel_function = 0.1, prior_known_function = 0.9):
     """Get strings for all predictions ready for printing to file."""
-
+    
+    print("Inferring predictions ...")
     predictions = _infer_predictions(dev_model)
+    print("Creating species_id_dict ...")
     model_dict = get_species_id_dict(model_file_in)
+    print("Creating met_synonyms_dict ...")
     db_met_syn_dict = get_met_synonyms_db()
     
+    num_unbalanced = 0
+    num_known = 0
     new_metabolites = []
     candidate_reactions = {}
+    reaction_xmls = {}
+    reaction_types = {}
+    counter = loop_counter(len(predictions), "Processing predictions:")
     for prediction in predictions:
+        
         prediction.initialise_xml_output(model_dict, db_met_syn_dict)
-        new_metabolites.extend(prediction.new_metabolites)
-        prediction.create_reaction_xml()
+        if prediction.model_reaction:
+            if prediction.model_reaction.model_id=="rxn00376":
+                print("This is the prediction for rxn00376:")
+                print prediction.db_reaction.pk
+                print prediction.cogzyme.pk
+                print prediction.model_reaction
+                
+        if ((not prediction.model_reaction) and prediction.balanced_reaction):
+            new_metabolites.extend(prediction.new_metabolites)
+            prediction.create_reaction_xml()
+            reaction_id = prediction.reaction_id
+            reaction_types[reaction_id] = "novel"
+            if reaction_id not in reaction_xmls:
+                reaction_xmls[reaction_id] = prediction.reaction_xml
+        elif prediction.model_reaction:
+            reaction_id = prediction.model_reaction.model_id
+            reaction_types[reaction_id] = "known"
+            num_known += 1
+        else:
+            num_unbalanced += 1
+        num_gprs = len(prediction.gprs)
         for gpr in prediction.gprs:
-            if prediction.model_reaction:
-                dict_append(candidate_reactions, prediction.model_reaction.model_id, gpr)
+            ### Add confidence along with GPR
+            prior_value = prediction.confidence / sqrt(num_gprs)
+            if reaction_types[reaction_id] == "known":
+                prior_value = prior_value * prior_known_function
             else:
-                dict_append(candidate_reactions, prediction.reaction_id, gpr)
+                prior_value = prior_value * prior_novel_function
+            dict_append(candidate_reactions, reaction_id, (gpr, prior_value))
+        counter.step()
+    counter.stop()
     
-    ###! START HERE
-    return candidate_reactions, new_metabolites
+    num_novel_candidates = len(candidate_reactions) - num_known
+    new_metabolites_nr = list(set(new_metabolites))
+    print("Number of novel reactions = {}".format(num_novel_candidates))
+    print("Number of known reactions = {}".format(num_known))
+    print("Number of excluded (unbalanced) reactions = {}".format(num_unbalanced))
+    print("Total new metabolite calls = {}".format(len(new_metabolites)))
+    print("Number of nr new metabolites = {}".format(len(new_metabolites_nr)))
+    return candidate_reactions, new_metabolites_nr, reaction_xmls, reaction_types
     
+def write_predictions(
+        dev_model,
+        model_file_in,
+        model_file_out,
+        model_file_out_2,
+        model_file_out_3,
+        prior_file_out,
+        candidate_reactions,
+        new_metabolites_nr,
+        reaction_xmls,
+        reaction_types):
+    """
+    Take collated prediction output and print to XML file of model.
+    """
+    f_prior = open(prior_file_out, 'w')
+    ### Create dictionaries of individual reaction XMLs and confidences
+    
+    full_reaction_xmls = []
+    for rxn_id, gprs_confs in candidate_reactions.iteritems():
+        if reaction_types[rxn_id] is not "known":
+            outline_xml = reaction_xmls[rxn_id]
+            for idx, gpr_conf in enumerate(gprs_confs):
+                rxn_id_suffix = "_enz{}".format(idx+1)
+                full_rxn_id = "{}{}".format(rxn_id, rxn_id_suffix)
+                gpr = gpr_conf[0]
+                confidence = gpr_conf[1]
+                f_prior.write("{}\t{}\n".format(full_rxn_id, confidence))
+                full_reaction_xml = outline_xml.format(full_rxn_id, gpr)
+                full_reaction_xmls.append(full_reaction_xml)
+        else:
+            pass
+    f_prior.close()
+        
+    ## Put all reaction XML together for output
+    all_rxns_xml = ""
+    for xml in full_reaction_xmls:
+        all_rxns_xml += xml
+    
+    ## Create all metabolite XML and concatenate
+    all_mets_xml = ""
+    for met_data in new_metabolites_nr:
+        all_mets_xml += species_declaration.format(*met_data)
+    
+    ### Export all XML, also add GPR to known reactions
+    
+    f_in = open(model_file_in,'r')
+    f_out = open(model_file_out,'w')    
+    for line in f_in:
+        if '</listOfSpecies>' in line:
+            f_out.write(all_mets_xml.encode('utf8'))
+        elif '</listOfReactions>' in line:
+            f_out.write(all_rxns_xml.encode('utf8'))
+        f_out.write(line)
+    f_in.close() 
+    f_out.close()
+    
+    ## Look for novel enzymes for existing reactions
+    novel_enzyme_reactions = []
+    f_prior = open(prior_file_out, 'a')
+    model = read_sbml_model(model_file_out)
+    write_sbml_model(model, model_file_out_2)
+    model = read_sbml_model(model_file_out_2)
+    for rxn_id, gprs_confs in candidate_reactions.iteritems():
+        if reaction_types[rxn_id] is "known":
+            novel_enzyme_reactions.append(rxn_id)
+            for idx, gpr_conf in enumerate(gprs_confs):
+                rxn_id_suffix = "_novel_enz{}".format(idx+1)
+                full_rxn_id = "{}{}".format(rxn_id, rxn_id_suffix)
+                gpr = str(gpr_conf[0])                
+                confidence = gpr_conf[1]
+                ## Create new reaction, and modify ID and GPR
+                new_reaction = deepcopy(model.reactions.get_by_id(rxn_id))
+                new_reaction.id = full_rxn_id
+                new_reaction.gene_reaction_rule = gpr
+                model.add_reaction(new_reaction)
+                ## Append a prior to prior file
+                f_prior.write("{}\t{}\n".format(full_rxn_id, confidence))    
+    write_sbml_model(model, model_file_out_3)
+    f_prior.close()
+    
+    ## Find removal predictions and note reaction IDs in prior file
+    removal_reaction_list = list(Reaction_pred.objects.filter(
+        dev_model=dev_model,
+        status='rem')\
+        .values_list('reaction__db_reaction__name', flat=True)\
+        .distinct())
+    
+    ## Find relevant model reaction IDs and note in ABC file
+    print novel_enzyme_reactions
+    f_prior = open(prior_file_out, 'a')
+    for db_rxn in removal_reaction_list:    
+        try:
+            model_rxn_id = Model_reaction.objects.get(db_reaction=db_rxn, source=dev_model).model_id
+        except:
+            try:
+                model_rxn_id = Model_reaction.objects.get(db_reaction__name=db_rxn, source=dev_model).model_id
+            except:
+                print("Could not find relevant reaction by either ID or name: '{}'".format(db_rxn))
+                continue
+        model_rxn_id = re.sub("^R_","",model_rxn_id)
+        print model_rxn_id 
+        if model_rxn_id not in novel_enzyme_reactions:
+            f_prior.write("{}\trem\n".format(model_rxn_id))     
+    f_prior.close()
+    
+    return model
     
 def _infer_predictions(dev_model):
     """Collect predictions and do analyses."""
@@ -710,12 +860,24 @@ class IncognitoPrediction():
             .values_list('ref_model__name', flat=True)\
             .distinct().count()
         
+        self.num_ref_models = Reaction_pred.objects\
+            .filter(dev_model=self.dev_model)\
+            .values_list('ref_model__name', flat=True)\
+            .distinct().count()
+        
+        self.proportion_models_predicting = float(self.num_models_predicting)/self.num_ref_models
+        
         ## Proportion of reaction metabolites found in dev_model
         num_mets = self.db_reaction.stoichiometry_set.all().count()
         num_mets_mapped = self.db_reaction.stoichiometry_set\
             .filter(metabolite__model_metabolite__source=dev_model)\
             .distinct().count()
         self.mapped_proportion = float(num_mets_mapped)/num_mets       
+        
+        self.confidence = self.proportion_models_predicting * self.mapped_proportion
+        if self.confidence == 0:
+            ## If no mapped metabolites give arbitrary small confidence
+            self.confidence = self.proportion_models_predicting * 0.1
 
         ## Infer all potential enzymes from gene locus constituents
         locus_cog_data = Gene.objects\
@@ -738,24 +900,48 @@ class IncognitoPrediction():
         
         ## Is reaction already in the model?
         try:
-            self.model_reaction = Model_reaction.objects.get(db_reaction=self.db_reaction)
+            self.model_reaction = Model_reaction.objects.get(source=self.dev_model, db_reaction=self.db_reaction)
         except:
             self.model_reaction = None
-
-    
-    def print_stats(self):
-        print("Reaction '{}', COGzyme {}:".format(self.db_reaction, self.cogzyme))
-        print(" - number of models predicting = {}".format(self.num_models_predicting))
-        print(" - proportion of metabolites mapped = {}".format(self.mapped_proportion))
-        print(" - number of reactions for this cogzyme = {}".format(self.num_reactions_for_this_cogzyme))
-        print(" - number of candidate enzymes = {}".format(len(self.enzyme_list)))
-    
-    def print_enzymes(self):
-        print("Candidate enzymes:")
-        for idx, enzyme in enumerate(self.enzyme_list):
-            print("{})\t{}".format(idx+1, enzyme))
-    
-    def _prepare_metabolite_xml(self, model_dict, db_met_syn_dict, db_to_model_id_dict):
+        
+        self.new_metabolites = []
+            
+    def initialise_xml_output(self, model_dict, db_met_syn_dict, max_enzyme_candidates = 20):
+        """Get the strings required for XML output."""
+        
+        ## Whether or not the reaction is in the model already, the new GPRs should be created in case the reaction does not hve one already
+        if len(self.enzyme_list) <= max_enzyme_candidates:
+            self.gprs = [" and ".join(gene_list) for gene_list in self.enzyme_list]
+#             if len(self.cog_locus_lists) > 1:
+#                 print(" - Locus lists:")    
+#                 for locus_list in self.cog_locus_lists: 
+#                     print locus_list
+#                 print(" - enzyme list, GPRs:") 
+#                 print self.enzyme_list
+#                 print self.gprs
+#                 print ""
+        else:
+            ## Create gpr strings for each COG in the cogzyme
+            components = ["( " + " or ".join(gene_list) + " )" for gene_list in self.cog_locus_lists]
+            ## Add the strings together into full GPR
+            self.gprs = ["( " + " and ".join(components) + " )"]
+#             print self.gprs[0]
+        
+        if not self.model_reaction:
+            ## Reaction not in model, so create from db_reaction
+            
+            self.reaction_id = self.db_reaction.name
+            self.reaction_name = self.db_reaction.name
+            self.reaction_source = self.db_reaction.source            
+            self.upper_bound = 1000
+            self.lower_bound = -1000
+            if self.db_reaction.reversibility_eqbtr > 0:
+                self.lower_bound = 0
+            elif self.db_reaction.reversibility_eqbtr < 0:
+                self.upper_bound = 0            
+            self._prepare_metabolite_xml(model_dict, db_met_syn_dict)
+               
+    def _prepare_metabolite_xml(self, model_dict, db_met_syn_dict):
         """Prepare XML from stoichiometry, including model metabolites where they can be found."""
         
         comp_swap = {}
@@ -766,22 +952,33 @@ class IncognitoPrediction():
         substrate_tuple_list = []
         product_tuple_list = []
         new_metabolites = []    
-        balanced_reaction = True
+        self.balanced_reaction = True
+        
+        if len(stoichiometry) == 2:
+            if stoichiometry[0].metabolite == stoichiometry[1].metabolite:
+                ## If the metabolites are the same, it is a transport reaction, so ensure that the two compartments are different.
+                if stoichiometry[0].compartment == stoichiometry[1].compartment:
+                    stoichiometry[0].compartment = Compartment.objects.get(id='MNXC2')
+                    stoichiometry[1].compartment = Compartment.objects.get(id='MNXC3')
+                    
+        
+        
+        
         for entry in stoichiometry:
             ## For each metabolite in the stoichiometry, check whether it's in the model
             
             metabolite = entry.metabolite
-     
             ## Get metabolite compartment 
             try:
-                mnx_compartment = entry.compartment.values_list('id', flat=True)
+                mnx_compartment = entry.compartment.id
             except:
                 mnx_compartment = '' 
             if mnx_compartment == 'MNXC2':
                 met_compartment = '_e'
             else:
                 met_compartment = '_c'
-
+                
+            
             met_id = metabolite.id
             original_id = metabolite.id
             
@@ -793,7 +990,7 @@ class IncognitoPrediction():
             
             ## If there is a specific metabolite then find it.
             model_id = is_model_met(model_dict, synonym_list)
-            
+                    
             if model_id is None:
                 for synonym in synonym_list:
                     #print synonym
@@ -816,25 +1013,27 @@ class IncognitoPrediction():
                     
                     model_id = "M_" + met_id + met_compartment
                 
+                ## Conform to SBML specifications
+                model_id = re.sub("[^a-zA-Z0-9_]+","__",model_id)
                 ## Metabolite (incl. compartment) was not found - will be added to species declaration
-                new_metabolites.append((model_id, original_id))
+                new_metabolites.append((model_id, original_id, met_compartment[-1]))
             else:
                 model_id = "M_" + model_id
-        
+
             ## Add to relevant part of equation
             if entry.stoichiometry < 0:
                 substrate_tuple_list.append((model_id,abs(entry.stoichiometry)))
             elif entry.stoichiometry > 0:
                 product_tuple_list.append((model_id,abs(entry.stoichiometry)))
             else:
-                print("Metabolite '{}' (Reaction '{}') did not have valid stoichiometry ...".format(model_id, self.db_reaction.name))
-                balanced_reaction = False    
-            db_to_model_id_dict[met_id] = model_id
+#                 print("Metabolite '{}' (Reaction '{}') did not have valid stoichiometry ...".format(model_id, self.db_reaction.name))
+                self.balanced_reaction = False    
+#             db_to_model_id_dict[met_id] = model_id
         
         self.substrate_string = None
         self.product_string = None
-        self.new_metabolites = None
-        if balanced_reaction:
+        self.new_metabolites = []
+        if self.balanced_reaction:
             ## Create substrate and product strings
             substrate_string = ''
             for substrate in substrate_tuple_list:
@@ -842,54 +1041,36 @@ class IncognitoPrediction():
             product_string = ''
             for product in product_tuple_list:
                 product_string += species_reference.format(*product)
-            self.substrate_string = substrate_string[:-1]
-            self.product_string = product_string[:-1]    
+            self.substrate_string = substrate_string.rstrip()
+            self.product_string = product_string.rstrip()    
             self.new_metabolites = new_metabolites
         
         return None
-            
-    def initialise_xml_output(self, model_dict, db_met_syn_dict, max_enzyme_candidates = 20):
-        """Get the strings required for XML output."""
-        
-        ## Whether or not the reaction is in the model already, the new GPRs should be created in case the reaction does not hve one already
-        if len(self.enzyme_list) <= max_enzyme_candidates:
-            self.gprs = [" and ".join(gene_list) for gene_list in self.enzyme_list]
-        else:
-            ## Create gpr strings for each COG in the cogzyme
-            components = ["( " + " or ".join(gene_list) + " )" for gene_list in self.cog_locus_lists]
-            ## Add the strings together into full GPR
-            self.gprs = ["( " + " and ".join(components) + " )"]
-            print self.gprs[0]
-        
-        if not self.model_reaction:
-            ## Reaction not in model, so create from db_reaction
-            
-            self.reaction_id = self.db_reaction.name
-            self.reaction_name = self.db_reaction.name
-            self.reaction_source = self.db_reaction.source            
-            self.upper_bound = 1000
-            self.lower_bound = -1000
-            if self.db_reaction.reversibility_eqbtr > 0:
-                self.lower_bound = 0
-            elif self.db_reaction.reversibility_eqbtr < 0:
-                self.upper_bound = 0            
-            self._prepare_metabolite_xml(model_dict, db_met_syn_dict)
 
     def create_reaction_xml(self):
         """After XML has been initialised, put it all together to create reaction XML.
         
         Do not include reaction ID, as it will need to be incremented for each  
         """
-        
         self.reaction_xml = reaction_string.format(
             self.reaction_name,
             self.reaction_source,
-            self.gpr,
-            self.substrate_string[:-1],
-            self.product_string[:-1],
+            self.substrate_string,
+            self.product_string,
             self.lower_bound,
             self.upper_bound)    
         
+    def print_stats(self):
+        print("Reaction '{}', COGzyme {}:".format(self.db_reaction, self.cogzyme))
+        print(" - number of models predicting = {}".format(self.num_models_predicting))
+        print(" - proportion of metabolites mapped = {}".format(self.mapped_proportion))
+        print(" - number of reactions for this cogzyme = {}".format(self.num_reactions_for_this_cogzyme))
+        print(" - number of candidate enzymes = {}".format(len(self.enzyme_list)))
+    
+    def print_enzymes(self):
+        print("Candidate enzymes:")
+        for idx, enzyme in enumerate(self.enzyme_list):
+            print("{})\t{}".format(idx+1, enzyme))
 
 
 
