@@ -24,6 +24,8 @@ class Command(BaseCommand):
         input_rels='/Users/wbryant/work/MTU/gene_essentiality/REL_lists/SEED_ICG_rels.csv'
         output_rels='/Users/wbryant/work/MTU/gene_essentiality/REL_lists/SEED_ICG_rels_seed_ids.csv'
         
+
+                                    
         print("Extracting RELs from model ...")
         model = ada.create_extended_model(model_file)
         f_out = open(input_rels, 'w')
@@ -52,9 +54,21 @@ class Command(BaseCommand):
             rxn_id = re.sub("_enz\d+$","",rxn_id)
             all_reaction_ids.append(rxn_id)
         print ("{} IDs found.\n".format(len(all_reaction_ids)))
-        
-        
         f_in.close()
+        
+        alt_dict = {}
+        alt_rxnid_list = Reaction_synonym.objects\
+            .filter(Q(reaction__reaction_synonym__synonym__in=all_reaction_ids)|\
+                    Q(reaction__name__in=all_reaction_ids),
+                    source__name=alt_target_db)\
+            .distinct()\
+            .values_list("reaction__reaction_synonym__synonym", "reaction__name", "synonym")        
+        
+        
+        
+        
+        
+        
         
         print("Finding all SEED synonyms for these reaction IDs ...")
         f_in = open(input_rels, 'r')
