@@ -44,7 +44,6 @@ DEFAULT_APPS = (
 )
 
 THIRD_PARTY_APPS = (
-    'south',
     'django_extensions',
 )
 
@@ -77,7 +76,7 @@ WSGI_APPLICATION = 'incognito.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql', # Add 'postgresql_psycopg2', 'mysql', 'sqlite3' or 'oracle'.
-        'NAME': 'incognito',                      # Or path to database file if using sqlite3.
+        'NAME': 'incognito_181',                      # Or path to database file if using sqlite3.
         'USER': 'wbryant',                      # Not used with sqlite3.
         'PASSWORD': 'mypass',                  # Not used with sqlite3.
         'HOST': '',                      # Set to empty string for localhost. Not used with sqlite3.
