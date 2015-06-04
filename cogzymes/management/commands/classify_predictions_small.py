@@ -319,7 +319,7 @@ def classify_preds(dev_model):
         for cz in cz_specific:
             valid_predictions.append((dbrxn, cz, mapped_proportion))
     
-    print("{}\t{}\t{}".format(num_pred_count_ok, num_cz_specificity_ok))
+    print("{}\t{}".format(num_pred_count_ok, num_cz_specificity_ok))
     
     return valid_predictions
     
