@@ -20,11 +20,14 @@ class Command(BaseCommand):
         alt_target_db='bigg'
         target_id_format='^rxn[0-9]{5}$'
         id_column = 1
-        model_file='/Users/wbryant/git/incognito/static/models/MTU_SEED_ICG.xml'
+        model_file='/Users/wbryant/work/MTU/gene_essentiality/abc-smc/data_files_corrected/model.xml'
         input_rels='/Users/wbryant/work/MTU/gene_essentiality/REL_lists/SEED_ICG_rels.csv'
         output_rels='/Users/wbryant/work/MTU/gene_essentiality/REL_lists/SEED_ICG_rels_seed_ids.csv'
         
-
+#         model_file='/Users/wbryant/git/incognito/static/models/MTU_SEED_original.xml'
+#         input_rels='/Users/wbryant/work/MTU/gene_essentiality/REL_lists/SEED_rels2.csv'
+#         output_rels='/Users/wbryant/work/MTU/gene_essentiality/REL_lists/SEED_rels_seed_ids.csv'
+        
                                     
         print("Extracting RELs from model ...")
         model = ada.create_extended_model(model_file)
@@ -48,7 +51,6 @@ class Command(BaseCommand):
             line_cols = line.strip().split('\t')
             all_reaction_ids_full.append(line_cols[id_column-1])
         all_reaction_ids_full = list(set(all_reaction_ids_full))
-        print ("{} IDs found.\n".format(len(all_reaction_ids_full)))
         print("Removing '_enz' tags ...")
         for rxn_id in all_reaction_ids_full:
             rxn_id = re.sub("_enz\d+$","",rxn_id)
@@ -57,17 +59,26 @@ class Command(BaseCommand):
         f_in.close()
         
         alt_dict = {}
-        alt_rxnid_list = Reaction_synonym.objects\
-            .filter(Q(reaction__reaction_synonym__synonym__in=all_reaction_ids)|\
-                    Q(reaction__name__in=all_reaction_ids),
+        alt_rxnid_list = list(Reaction_synonym.objects\
+            .filter(reaction__reaction_synonym__synonym__in=all_reaction_ids,\
                     source__name=alt_target_db)\
             .distinct()\
-            .values_list("reaction__reaction_synonym__synonym", "reaction__name", "synonym")        
+            .values_list("reaction__reaction_synonym__synonym", "synonym"))        
         
+        alt_rxnid_list2 = list(Reaction_synonym.objects\
+            .filter(reaction__name__in=all_reaction_ids,
+                    source__name=alt_target_db)\
+            .distinct()\
+            .values_list("reaction__name", "synonym"))        
         
+        alt_rxnid_list.extend(alt_rxnid_list2)
         
+        alt_rxnid_list = list(set(alt_rxnid_list))
         
-        
+        ## Just take first alternative ID for each reaction
+        for item in alt_rxnid_list:
+            if item[0] not in alt_dict:
+                alt_dict[item[0]] = item[1] 
         
         
         print("Finding all SEED synonyms for these reaction IDs ...")
@@ -98,6 +109,7 @@ class Command(BaseCommand):
                                                         target_id_format))
         rxn_ids_not_found = []
         num_converted = 0       
+        num_converted_alt = 0
         for line in f_in:
             line_cols = line.strip().split('\t')
             rxn_id = line_cols[id_column-1]
@@ -111,7 +123,11 @@ class Command(BaseCommand):
                             num_converted += 1
                             break
                 else:
-                    rxn_ids_not_found.append(new_rxn_id)       
+                    if new_rxn_id in alt_dict:
+                        new_rxn_id = alt_dict[new_rxn_id]
+                        num_converted_alt += 1
+                    else:
+                        rxn_ids_not_found.append(new_rxn_id)       
             line_cols[id_column-1] = new_rxn_id
             f_out.write("{}\n".format("\t".join(line_cols)))
             counter.step()
@@ -119,19 +135,9 @@ class Command(BaseCommand):
         f_out.close()
         counter.stop()
         rxn_ids_not_found = list(set(rxn_ids_not_found))
-        print("{} reaction IDs were successfully converted.".format(num_converted))
+        print("{} reaction IDs were successfully converted to target DB IDs.".format(num_converted))
+        print("{} reaction IDs were successfully converted to alternative target DB IDs.".format(num_converted_alt))
         print("The following reaction IDs did not have corresponding SEED IDs or were not present in the database:\n")
-        for rxn_id in rxn_ids_not_found:
-            ## Is there a BiGG identifier?
-            try:
-                bigg_synonym = Reaction_synonym.objects\
-                    .filter(Q(reaction__reaction_synonym__synonym=rxn_id)|\
-                         Q(reaction__name=rxn_id),
-                         source__name="bigg")\
-                    .distinct()\
-                    .values_list("synonym", flat=True)
-            except:
-                bigg_synonym = ["-"]
-                
-            print("'{}' (BiGG ID: '{}')".format(rxn_id, "', '".join(bigg_synonym)))
+        for rxn_id in rxn_ids_not_found:                
+            print("'{}'".format(rxn_id))
                     
