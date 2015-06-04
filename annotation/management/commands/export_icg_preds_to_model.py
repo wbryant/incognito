@@ -17,26 +17,26 @@ os.environ["PYTHONWARNINGS"] ="ignore"
 
 # Example species reference: '<speciesReference species="M_h_c" stoichiometry="1"/>'
 
-reaction_string = u"""      <reaction id="{{}}" name="{}" reversible="true">
+reaction_string = u"""      <reaction id="{reaction_id}" name="{reaction_name}" reversible="true">
         <notes>
           <body xmlns="http://www.w3.org/1999/xhtml">
-            <p>SOURCE: {}</p>
-            <p>GENE_ASSOCIATION: {{}}</p>
+            <p>SOURCE: {source_name}</p>
+            <p>GENE_ASSOCIATION: {gene_association}</p>
           </body>
         </notes>
         <listOfReactants>
-{}
+{reactants}
         </listOfReactants>
         <listOfProducts>
-{}
+{products}
         </listOfProducts>
         <kineticLaw>
           <math xmlns="http://www.w3.org/1998/Math/MathML">
             <ci> FLUX_VALUE </ci>
           </math>
           <listOfParameters>
-            <parameter id="LOWER_BOUND" value="{}" units="mmol_per_gDW_per_hr" constant="false"/>
-            <parameter id="UPPER_BOUND" value="{}" units="mmol_per_gDW_per_hr" constant="false"/>
+            <parameter id="LOWER_BOUND" value="{lower_bound}" units="mmol_per_gDW_per_hr" constant="false"/>
+            <parameter id="UPPER_BOUND" value="{upper_bound}" units="mmol_per_gDW_per_hr" constant="false"/>
             <parameter id="FLUX_VALUE" value="0" units="mmol_per_gDW_per_hr" constant="false"/>
             <parameter id="OBJECTIVE_COEFFICIENT" value="0" units="mmol_per_gDW_per_hr" constant="false"/>
           </listOfParameters>
@@ -46,7 +46,7 @@ reaction_string = u"""      <reaction id="{{}}" name="{}" reversible="true">
 
 species_reference = u'          <speciesReference species="{}" stoichiometry="{}"/>\n'
 
-species_declaration = u'      <species id="{}" name="{}" compartment="{}" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false"></species>\n'
+species_declaration = u'      <species id="{species_id}" name="{species_name}" compartment="{compartment}" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false"></species>\n'
 
 
 class Command(BaseCommand):
@@ -58,14 +58,24 @@ class Command(BaseCommand):
         """ Export ICG predictions to SBML, along with a set of DB reactions if required. 
         """ 
         
-        ## Set model and input/output files
-        model_file_in = '/Users/wbryant/work/BTH/data/iAH991/BTH_with_gprs.xml'
-        dev_model = Source.objects.get(name='iAH991')        
         try:
-            model_file_out = args[0]
-        except:
-            model_file_out = '/Users/wbryant/work/BTH/analysis/working_models/scratch_model.xml'
-
+            model_file_in = args[0]
+            model_file_out = args[1]
+            dev_model_id = args[2]
+            dev_model = Source.objects.get(name=dev_model_id)
+        except:        
+            sys.exit(1)
+            ## Set model and input/output files
+            model_file_in = '/Users/wbryant/work/BTH/data/iAH991/BTH_with_gprs.xml'
+            dev_model = Source.objects.get(name='iAH991')        
+            try:
+                model_file_out = args[0]
+            except:
+                model_file_out = '/Users/wbryant/work/BTH/analysis/working_models/scratch_model.xml'
+        
+        rem_prior = 0.9
+        add_prior = 0.1
+        
         ## Infer direct reaction/enzyme predictions from Reaction_preds for dev_model (InCOGnito)
         rxn_gpr_tuples = infer_rxn_enz_pairs_from_preds(dev_model)
          
@@ -81,7 +91,7 @@ class Command(BaseCommand):
             .distinct())
         
         ## Find relevant model reaction IDs and note in ABC file
-        abc_file_out = '/Users/wbryant/work/BTH/analysis/working_models/scratch_model_removals.txt' 
+        abc_file_out = '/Users/wbryant/work/MTU/gene_essentiality/abc-smc/data_files_corrected/pred_list.txt' 
         abc_file = open(abc_file_out, "w")
         for db_rxn in removal_reaction_list:    
             try:
@@ -90,11 +100,11 @@ class Command(BaseCommand):
                 try:
                     model_rxn_id = Model_reaction.objects.get(db_reaction__name=db_rxn, source=dev_model).model_id
                 except:
-                    print("Could not find relevant reaction by either ID or name: '{}'".format(db_rxn))
+                    print("Could not find reaction for removal: '{}'".format(db_rxn))
                     continue
-            abc_file.write("{}\trem\n".format(model_rxn_id[2:]))            
+            abc_file.write("{}\t{}\n".format(model_rxn_id, rem_prior))            
         for rxn_id in rxns_added:
-            abc_file.write("{}\tadd\n".format(rxn_id))
+            abc_file.write("{}\t{}\n".format(rxn_id, add_prior))
         abc_file.close() 
 
 def convert_db_rxns_to_sbml(rxn_gene_list, 
@@ -264,14 +274,14 @@ def convert_db_rxns_to_sbml(rxn_gene_list,
             
             ## Create reaction string 
             reaction_xml = reaction_string.format(
-                reaction_id,
-                reaction_name,
-                reaction_source,
-                gpr,
-                substrate_string[:-1],
-                product_string[:-1],
-                lower_bound,
-                upper_bound) 
+                reaction_id = reaction_id,
+                reaction_name = reaction_name,
+                source_name = reaction_source,
+                gene_association = gpr,
+                reactants = substrate_string[:-1],
+                products = product_string[:-1],
+                lower_bound = lower_bound,
+                upper_bound = upper_bound) 
             
             if lower_bound == 0:
                 print 'for', reaction_id
@@ -288,7 +298,10 @@ def convert_db_rxns_to_sbml(rxn_gene_list,
         synonyms = Metabolite_synonym.objects.filter(metabolite__id = item[1]).values_list('synonym',flat=True)
         met_name = max(synonyms, key=len)
         met_comp = met_id[-1:]
-        sp_string += species_declaration.format(met_id, met_name, met_comp)
+        sp_string += species_declaration.format(
+                            species_id = met_id,
+                            species_name = met_name,
+                            compartment = met_comp)
     
     ## Split input model and add reactions and species
     f_in = open(model_file_in,'r')
@@ -1050,15 +1063,15 @@ class IncognitoPrediction():
     def create_reaction_xml(self):
         """After XML has been initialised, put it all together to create reaction XML.
         
-        Do not include reaction ID, as it will need to be incremented for each  
+        Do not include reaction ID, as it will need to be incremented for each cogzyme? 
         """
         self.reaction_xml = reaction_string.format(
-            self.reaction_name,
-            self.reaction_source,
-            self.substrate_string,
-            self.product_string,
-            self.lower_bound,
-            self.upper_bound)    
+            reaction_name = self.reaction_name,
+            source_name = self.reaction_source,
+            reactants = self.substrate_string,
+            products = self.product_string,
+            lower_bound = self.lower_bound,
+            upper_bound = self.upper_bound)    
         
     def print_stats(self):
         print("Reaction '{}', COGzyme {}:".format(self.db_reaction, self.cogzyme))
