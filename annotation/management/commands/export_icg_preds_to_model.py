@@ -64,14 +64,14 @@ class Command(BaseCommand):
             dev_model_id = args[2]
             dev_model = Source.objects.get(name=dev_model_id)
         except:        
-            sys.exit(1)
+#             sys.exit(1)
             ## Set model and input/output files
             model_file_in = '/Users/wbryant/work/BTH/data/iAH991/BTH_with_gprs.xml'
             dev_model = Source.objects.get(name='iAH991')        
             try:
                 model_file_out = args[0]
             except:
-                model_file_out = '/Users/wbryant/work/BTH/analysis/working_models/scratch_model.xml'
+                model_file_out = '/Users/wbryant/work/BTH/analysis/working_models/BTH_ICG.xml'
         
         rem_prior = 0.9
         add_prior = 0.1
@@ -91,7 +91,7 @@ class Command(BaseCommand):
             .distinct())
         
         ## Find relevant model reaction IDs and note in ABC file
-        abc_file_out = '/Users/wbryant/work/MTU/gene_essentiality/abc-smc/data_files_corrected/pred_list.txt' 
+        abc_file_out = '/Users/wbryant/work/BTH/analysis/ABC-SMC/data_files/pred_list.txt' 
         abc_file = open(abc_file_out, "w")
         for db_rxn in removal_reaction_list:    
             try:
